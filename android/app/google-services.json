@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "880790845788",
+    "project_id": "golemons-ee306",
+    "storage_bucket": "golemons-ee306.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:880790845788:android:271cbc33f3aebeabb4e999",
+        "android_client_info": {
+          "package_name": "com.example.mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKn62T5HCM7JghmmqyocKm9YPffzlLHNg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
