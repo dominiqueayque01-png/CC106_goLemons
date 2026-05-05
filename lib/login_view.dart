@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; 
-import 'main.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'main.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -18,7 +18,7 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
-  bool _isLoginMode = true; 
+  bool _isLoginMode = true;
 
   // Clean up memory when this screen is closed
   @override
@@ -38,7 +38,9 @@ class _LoginViewState extends State<LoginView> {
     final String password = _passwordController.text.trim();
 
     // Validation: Require all fields if they are signing up!
-    if (email.isEmpty || password.isEmpty || (!_isLoginMode && (name.isEmpty || username.isEmpty))) {
+    if (email.isEmpty ||
+        password.isEmpty ||
+        (!_isLoginMode && (name.isEmpty || username.isEmpty))) {
       _showError('Please fill in all required fields.');
       return;
     }
@@ -49,45 +51,72 @@ class _LoginViewState extends State<LoginView> {
 
     try {
       if (_isLoginMode) {
+        // ==========================================
         // --- LOG IN MODE ---
+        // ==========================================
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
-      } else {
-        // --- SIGN UP MODE ---
-        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
+
+        if (!mounted) return;
+
+        // Success! Navigate to the dashboard (ONLY HAPPENS ON LOG IN NOW)
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 600),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const MainScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+          ),
         );
-        
+      } else {
+        // ==========================================
+        // --- SIGN UP MODE ---
+        // ==========================================
+        UserCredential userCredential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+
         // Immediately update their Firebase profile with their new Username!
         await userCredential.user?.updateDisplayName(username);
 
         // Create their permanent database folder
-        await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-          'fullName': name,
-          'username': username,
-          'email': email,
-          'createdAt': DateTime.now(), 
-          'totalEntries': 0, 
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+              'fullName': name,
+              'username': username,
+              'email': email,
+              'createdAt': DateTime.now(),
+              'totalEntries': 0,
+            });
+
+        // 🍋 1. Sign out the user immediately so they aren't logged in behind the scenes
+        await FirebaseAuth.instance.signOut();
+
+        if (!mounted) return;
+
+        // 🍋 2. Stop loading, switch back to login mode, and clear the password
+        setState(() {
+          _isLoading = false;
+          _isLoginMode = true;
+          _passwordController.clear(); // Force them to retype the password
         });
+
+        // 🍋 3. Show a friendly success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Please sign in.'),
+            backgroundColor: Colors.green, // Green for success!
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-
-      if (!mounted) return;
-
-      // Success! Navigate to the dashboard
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 600),
-          pageBuilder: (context, animation, secondaryAnimation) => const MainScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      );
-
     } on FirebaseAuthException catch (e) {
       setState(() {
         _isLoading = false;
@@ -140,16 +169,25 @@ class _LoginViewState extends State<LoginView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // --- Header ---
-                Icon(Icons.sentiment_satisfied_alt, size: 100, color: Colors.yellow[700]),
+                Icon(
+                  Icons.sentiment_satisfied_alt,
+                  size: 100,
+                  color: Colors.yellow[700],
+                ),
                 const SizedBox(height: 24),
                 Text(
                   _isLoginMode ? 'Welcome back' : 'Create an Account',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isLoginMode ? 'Sign in to track your moods' : 'Tell us a bit about yourself',
+                  _isLoginMode
+                      ? 'Sign in to track your moods'
+                      : 'Tell us a bit about yourself',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
@@ -159,24 +197,30 @@ class _LoginViewState extends State<LoginView> {
                 if (!_isLoginMode) ...[
                   TextField(
                     controller: _nameController,
-                    enabled: !_isLoading, 
+                    enabled: !_isLoading,
                     decoration: InputDecoration(
                       labelText: 'Full Name',
                       filled: true,
                       fillColor: Colors.grey[50],
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextField(
                     controller: _usernameController,
-                    enabled: !_isLoading, 
+                    enabled: !_isLoading,
                     decoration: InputDecoration(
                       labelText: 'Username',
                       filled: true,
                       fillColor: Colors.grey[50],
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -186,12 +230,15 @@ class _LoginViewState extends State<LoginView> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  enabled: !_isLoading, 
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
                     labelText: 'Email',
                     filled: true,
                     fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -199,12 +246,15 @@ class _LoginViewState extends State<LoginView> {
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  enabled: !_isLoading, 
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
                     labelText: 'Password',
                     filled: true,
                     fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -214,26 +264,36 @@ class _LoginViewState extends State<LoginView> {
                   onPressed: _isLoading ? null : _submitAuth,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.yellow[600],
-                    disabledBackgroundColor: Colors.yellow[300], 
+                    disabledBackgroundColor: Colors.yellow[300],
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                          height: 24, width: 24,
-                          child: CircularProgressIndicator(color: Colors.black54, strokeWidth: 3),
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.black54,
+                            strokeWidth: 3,
+                          ),
                         )
                       : Text(
                           _isLoginMode ? 'Sign In' : 'Sign Up',
-                          style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                 ),
                 const SizedBox(height: 16),
 
                 // --- The Mode Toggle ---
                 TextButton(
-                  onPressed: _isLoading 
-                      ? null 
+                  onPressed: _isLoading
+                      ? null
                       : () {
                           setState(() {
                             _isLoginMode = !_isLoginMode;
@@ -242,56 +302,65 @@ class _LoginViewState extends State<LoginView> {
                           });
                         },
                   child: Text(
-                    _isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In",
-                    style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.bold),
+                    _isLoginMode
+                        ? "Don't have an account? Sign Up"
+                        : "Already have an account? Sign In",
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 32), // Increased spacing for visual separation
+                const SizedBox(height: 32),
 
                 // --- OR Divider ---
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                    Expanded(
+                      child: Divider(color: Colors.grey[300], thickness: 1),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('Or continue with', style: TextStyle(color: Colors.grey[600])),
+                      child: Text(
+                        'Or continue with',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
                     ),
-                    Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                    Expanded(
+                      child: Divider(color: Colors.grey[300], thickness: 1),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
 
-                // 🍋 --- Social Login Buttons (Redesigned to match image_7.png!) ---
+                // --- Social Login Buttons ---
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center, // Center the row
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // 🍋 Google Button: Now full color 'G' on white background with grey border
                     _buildSocialButton(
-                      imagePath: 'assets/logos/google_logo.png', // Requires image asset!
+                      imagePath: 'assets/logos/google_logo.png',
                       backgroundColor: Colors.white,
-                      borderColor: Colors.grey[200]!, // Subtle grey border like in the image
+                      borderColor: Colors.grey[200]!,
                       onTap: () {
                         print("Google Login Tapped!");
                       },
                     ),
-                    const SizedBox(width: 16), // Sizing between buttons
-                    
-                    // 🍋 Apple Button: Solid black background with white logo
+                    const SizedBox(width: 16),
+
                     _buildSocialButton(
-                      imagePath: 'assets/logos/apple_logo.png', // Requires image asset!
+                      imagePath: 'assets/logos/apple_logo.png',
                       backgroundColor: Colors.black,
-                      borderColor: Colors.black, // Match border to background
+                      borderColor: Colors.black,
                       onTap: () {
                         print("Apple Login Tapped!");
                       },
                     ),
                     const SizedBox(width: 16),
 
-                    // 🍋 Facebook Button: Solid brand blue background with white 'f' logo
                     _buildSocialButton(
-                      imagePath: 'assets/logos/facebook_logo.png', // Requires image asset!
-                      backgroundColor: const Color(0xFF1877F2), // Official Facebook Blue
-                      borderColor: const Color(0xFF1877F2), // Match border to background
+                      imagePath: 'assets/logos/facebook_logo.png',
+                      backgroundColor: const Color(0xFF1877F2),
+                      borderColor: const Color(0xFF1877F2),
                       onTap: () {
                         print("Facebook Login Tapped!");
                       },
@@ -306,8 +375,6 @@ class _LoginViewState extends State<LoginView> {
     );
   }
 
-  // 🍋 --- REFACTORED Social Button Helper ---
-  // Now uses images, handles aspect ratios, and custom coloring to match image_7.png exactly.
   Widget _buildSocialButton({
     required String imagePath,
     required Color backgroundColor,
@@ -316,24 +383,17 @@ class _LoginViewState extends State<LoginView> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12), // Matching the rectangular look in image_7.png
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        // Set fixed width/height to make perfect square buttons
-        width: 60, 
+        width: 60,
         height: 50,
-        padding: const EdgeInsets.all(12), // Inner padding for the logo
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: backgroundColor,
           border: Border.all(color: borderColor, width: 1.5),
-          borderRadius: BorderRadius.circular(12), // Rounded corners like the reference
+          borderRadius: BorderRadius.circular(12),
         ),
-        // We use Image.asset now instead of Icon!
-        child: Image.asset(
-          imagePath,
-          fit: BoxFit.contain, // Ensures the full logo fits inside the container
-          // Note: Standard images like the Google 'G' don't need a color property.
-          // For Apple/Facebook (white logos), ensure the PNG asset you have is white on a transparent background.
-        ),
+        child: Image.asset(imagePath, fit: BoxFit.contain),
       ),
     );
   }
