@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'entry_details_view.dart'; // 🍋 NEW: Import the edit screen we built!
+import 'entry_details_view.dart';
 import 'modern_transitions.dart';
 
 class HomeView extends StatefulWidget {
@@ -11,19 +11,19 @@ class HomeView extends StatefulWidget {
   State<HomeView> createState() => _HomeViewState();
 }
 
-class _HomeViewState extends State<HomeView> {
-  // 1. Dynamic Motivation Quotes
+// 🍋 OPTIMIZATION 1: Added 'AutomaticKeepAliveClientMixin' to freeze this tab in memory when you swipe away!
+class _HomeViewState extends State<HomeView>
+    with AutomaticKeepAliveClientMixin {
   final List<String> _motivations = [
-    "A fresh week, a fresh start. Let's go!", // Monday
-    "Small steps every day lead to big results.", // Tuesday
-    "Consistency is your superpower.", // Wednesday
-    "Your feelings are valid. Thanks for checking in!", // Thursday
-    "Squeeze the day! 🍋", // Friday
-    "Take a deep breath. You're doing great.", // Saturday
-    "Tracking your mood is a form of self-care." // Sunday
+    "A fresh week, a fresh start. Let's go!",
+    "Small steps every day lead to big results.",
+    "Consistency is your superpower.",
+    "Your feelings are valid. Thanks for checking in!",
+    "Squeeze the day! 🍋",
+    "Take a deep breath. You're doing great.",
+    "Tracking your mood is a form of self-care.",
   ];
 
-  // 2. Upgraded Streak Engine (Now accepts cloud dates!)
   int _calculateStreak(List<DateTime> allDates) {
     if (allDates.isEmpty) return 0;
 
@@ -39,35 +39,47 @@ class _HomeViewState extends State<HomeView> {
 
     DateTime today = DateTime.now();
     DateTime justToday = DateTime(today.year, today.month, today.day);
-    
+
     int streak = 0;
     DateTime currentDateToCheck = justToday;
 
-    if (uniqueDates.first != justToday && 
+    if (uniqueDates.first != justToday &&
         uniqueDates.first != justToday.subtract(const Duration(days: 1))) {
-      return 0; 
+      return 0;
     }
 
     for (int i = 0; i < uniqueDates.length; i++) {
       if (uniqueDates[i] == currentDateToCheck) {
         streak++;
-        currentDateToCheck = currentDateToCheck.subtract(const Duration(days: 1));
-      } else if (i == 0 && uniqueDates[i] == currentDateToCheck.subtract(const Duration(days: 1))) {
+        currentDateToCheck = currentDateToCheck.subtract(
+          const Duration(days: 1),
+        );
+      } else if (i == 0 &&
+          uniqueDates[i] ==
+              currentDateToCheck.subtract(const Duration(days: 1))) {
         streak++;
-        currentDateToCheck = currentDateToCheck.subtract(const Duration(days: 2));
+        currentDateToCheck = currentDateToCheck.subtract(
+          const Duration(days: 2),
+        );
       } else {
-        break; 
+        break;
       }
     }
     return streak;
   }
 
+  // 🍋 OPTIMIZATION 2: You MUST override wantKeepAlive and return true!
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   Widget build(BuildContext context) {
-    final brandColor = Colors.yellow[600]!; 
+    // 🍋 OPTIMIZATION 3: You MUST call super.build(context) at the top of your build method!
+    super.build(context);
+
+    final brandColor = Colors.yellow[600]!;
     String dailyQuote = _motivations[DateTime.now().weekday - 1];
 
-    // 🍋 1. Check who is logged in
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Center(child: Text("Please log in to see your dashboard."));
@@ -76,7 +88,6 @@ class _HomeViewState extends State<HomeView> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
-        // 🍋 2. Open the live pipe to the specific user's database folder!
         child: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
@@ -85,32 +96,32 @@ class _HomeViewState extends State<HomeView> {
               .orderBy('date', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
-            
-            // Show a spinner while the data loads from the cloud
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: Colors.yellow));
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.yellow),
+              );
             }
 
             if (snapshot.hasError) {
-              return const Center(child: Text('Something went wrong loading your entries.'));
+              return const Center(
+                child: Text('Something went wrong loading your entries.'),
+              );
             }
 
-            // Get the cloud documents (or an empty list if they have none)
             final cloudEntries = snapshot.hasData ? snapshot.data!.docs : [];
 
             // --- DATA PROCESSING ---
-            
-            // A. Extract all dates for the streak calculator
             List<DateTime> allDates = cloudEntries.map((doc) {
               return (doc['date'] as Timestamp).toDate();
             }).toList();
             int currentStreak = _calculateStreak(allDates);
 
-            // B. Filter the cloud entries to ONLY show today's entries in the list
             DateTime today = DateTime.now();
             var todaysDocs = cloudEntries.where((doc) {
               DateTime d = (doc['date'] as Timestamp).toDate();
-              return d.year == today.year && d.month == today.month && d.day == today.day;
+              return d.year == today.year &&
+                  d.month == today.month &&
+                  d.day == today.day;
             }).toList();
 
             // --- THE UI ---
@@ -118,9 +129,15 @@ class _HomeViewState extends State<HomeView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // --- 1. The Greeting ---
-                const Text('Hello! 👋', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Hello! 👋',
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                Text('How are you feeling today?', style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+                Text(
+                  'How are you feeling today?',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
                 const SizedBox(height: 24),
 
                 // --- 2. The Daily Streak Hero Card ---
@@ -132,7 +149,7 @@ class _HomeViewState extends State<HomeView> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: brandColor.withOpacity(0.4), 
+                        color: brandColor.withOpacity(0.4),
                         blurRadius: 15,
                         offset: const Offset(0, 8),
                       ),
@@ -145,21 +162,35 @@ class _HomeViewState extends State<HomeView> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Your Momentum', 
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)
+                            'Your Momentum',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Row(
                               children: [
-                                const Text('🔥 ', style: TextStyle(fontSize: 16)),
+                                const Text(
+                                  '🔥 ',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                                 Text(
-                                  '$currentStreak Days', 
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16)
+                                  '$currentStreak Days',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ],
                             ),
@@ -169,7 +200,12 @@ class _HomeViewState extends State<HomeView> {
                       const SizedBox(height: 20),
                       Text(
                         dailyQuote,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black, height: 1.3),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          height: 1.3,
+                        ),
                       ),
                     ],
                   ),
@@ -177,64 +213,144 @@ class _HomeViewState extends State<HomeView> {
                 const SizedBox(height: 32),
 
                 // --- 3. Today's Dashboard List ---
-                const Text("Today's Squeezes", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text(
+                  "Today's Squeezes",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 12),
-                
-                Expanded(
-                  child: todaysDocs.isEmpty
-                    ? Center(child: Text("You haven't logged anything today yet!", style: TextStyle(color: Colors.grey[500], fontStyle: FontStyle.italic)))
-                    : ListView.builder(
-                        itemCount: todaysDocs.length,
-                        itemBuilder: (context, index) {
-                          // Extract the data from the cloud document
-                          var document = todaysDocs[index];
-                          var data = document.data() as Map<String, dynamic>;
-                          
-                          String docId = document.id;
-                          String mood = data['mood'] ?? '';
-                          String emoji = data['emoji'] ?? '🍋';
-                          String note = data['note'] ?? '';
 
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            color: Colors.yellow[50], 
-                            elevation: 0,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(16),
-                              leading: Text(emoji, style: const TextStyle(fontSize: 32)),
-                              title: Text(mood, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                              subtitle: note.isNotEmpty 
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(top: 8.0),
-                                      child: Text(note, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey[800])),
-                                    )
-                                  : null,
-                              // 🍋 3. Navigates to your new Edit Screen!
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  // 🍋 Swapped MaterialPageRoute for ModernFadeRoute!
-                                  ModernFadeRoute(
-                                    page: EntryDetailsView(
-                                      documentId: docId,
-                                      mood: mood,
-                                      emoji: emoji,
-                                      initialNote: note,
-                                      dateString: "Today", 
-                                    ),
-                                  ),
-                                );
-                              },
+                Expanded(
+                  // 🍋 OPTIMIZATION 4: Wrapped the animated list in a RepaintBoundary so sliding transitions don't force heavy layout redraws!
+                  child: RepaintBoundary(
+                    child: todaysDocs.isEmpty
+                        ? Center(
+                            child: Text(
+                              "You haven't logged anything today yet!",
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.builder(
+                            itemCount: todaysDocs.length,
+                            itemBuilder: (context, index) {
+                              var document = todaysDocs[index];
+                              var data =
+                                  document.data() as Map<String, dynamic>;
+
+                              String docId = document.id;
+                              String mood = data['mood'] ?? '';
+                              String emoji = data['emoji'] ?? '🍋';
+                              String note = data['note'] ?? '';
+
+                              return FadeInSlideListItem(
+                                index: index,
+                                child: Card(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  color: Colors.yellow[50],
+                                  elevation: 0,
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.all(16),
+                                    leading: Text(
+                                      emoji,
+                                      style: const TextStyle(fontSize: 32),
+                                    ),
+                                    title: Text(
+                                      mood,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    subtitle: note.isNotEmpty
+                                        ? Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 8.0,
+                                            ),
+                                            child: Text(
+                                              note,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: Colors.grey[800],
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        ModernFadeRoute(
+                                          page: EntryDetailsView(
+                                            documentId: docId,
+                                            mood: mood,
+                                            emoji: emoji,
+                                            initialNote: note,
+                                            dateString: "Today",
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ),
               ],
             );
-          }
+          },
         ),
+      ),
+    );
+  }
+}
+
+class FadeInSlideListItem extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const FadeInSlideListItem({
+    super.key,
+    required this.index,
+    required this.child,
+  });
+
+  @override
+  State<FadeInSlideListItem> createState() => _FadeInSlideListItemState();
+}
+
+class _FadeInSlideListItemState extends State<FadeInSlideListItem> {
+  bool _isVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: widget.index * 50), () {
+      if (mounted) {
+        setState(() {
+          _isVisible = true;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _isVisible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+        margin: EdgeInsets.only(top: _isVisible ? 0.0 : 20.0),
+        child: widget.child,
       ),
     );
   }

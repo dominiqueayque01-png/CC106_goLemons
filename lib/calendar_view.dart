@@ -14,10 +14,22 @@ class _CalendarViewState extends State<CalendarView> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  // 🍋 ANIMATION STATE: Controls the smooth swelling entrance of the calendar grid
+  bool _calendarAnimated = false;
+
   @override
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
+
+    // Trigger the calendar scale animation immediately after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _calendarAnimated = true;
+        });
+      }
+    });
   }
 
   // A quick helper to format the date nicely (e.g., "3/15/2026")
@@ -32,7 +44,6 @@ class _CalendarViewState extends State<CalendarView> {
 
   @override
   Widget build(BuildContext context) {
-    // 🍋 1. Check who is logged in
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       return const Center(child: Text("Please log in to see your calendar."));
@@ -43,7 +54,7 @@ class _CalendarViewState extends State<CalendarView> {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          // 🍋 2. Open the live pipe to the user's specific cloud entries!
+
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('users')
@@ -64,16 +75,15 @@ class _CalendarViewState extends State<CalendarView> {
               }
 
               final cloudEntries = snapshot.hasData ? snapshot.data!.docs : [];
-
-              // 🍋 3. Group the cloud data by date so the calendar can read it!
+              // Group the cloud data by date so the calendar can read it!
               Map<DateTime, List<Map<String, dynamic>>> groupedEntries = {};
 
               for (var doc in cloudEntries) {
                 final data = doc.data() as Map<String, dynamic>;
+
                 if (data['date'] != null) {
-                  // Convert Firebase Timestamp to a standard DateTime
                   DateTime entryDate = (data['date'] as Timestamp).toDate();
-                  // Normalize it to midnight UTC
+
                   DateTime normalizedDate = _normalizeDate(entryDate);
 
                   if (groupedEntries[normalizedDate] == null) {
@@ -83,12 +93,10 @@ class _CalendarViewState extends State<CalendarView> {
                 }
               }
 
-              // The scanner that grabs moods for a specific day from our new grouped map
               List<Map<String, dynamic>> getEventsForDay(DateTime day) {
                 return groupedEntries[_normalizeDate(day)] ?? [];
               }
 
-              // Get today's specific events to pass down to the Notes tab
               List<Map<String, dynamic>> selectedDayEvents = getEventsForDay(
                 _selectedDay ?? _focusedDay,
               );
@@ -134,12 +142,8 @@ class _CalendarViewState extends State<CalendarView> {
                   Expanded(
                     child: TabBarView(
                       children: [
-                        _buildPatternTab(
-                          getEventsForDay,
-                        ), // Pass the function to load markers
-                        _buildNotesTab(
-                          selectedDayEvents,
-                        ), // Pass the actual data for the selected day
+                        _buildPatternTab(getEventsForDay),
+                        _buildNotesTab(selectedDayEvents),
                       ],
                     ),
                   ),
@@ -179,61 +183,74 @@ class _CalendarViewState extends State<CalendarView> {
         ),
         const SizedBox(height: 16),
 
-        Card(
-          elevation: 0,
-          color: Colors.yellow[50],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TableCalendar(
-              firstDay: DateTime.utc(2023, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-              },
-
-              eventLoader: getEvents, // Uses our live Firebase map!
-
-              calendarBuilders: CalendarBuilders(
-                markerBuilder: (context, date, events) {
-                  if (events.isNotEmpty) {
-                    // Show the emoji of the most recent entry for that day
-                    final entry = events.last as Map<String, dynamic>;
-                    String emoji = entry['emoji'] ?? '🍋';
-                    return Positioned(
-                      bottom: -2,
-                      child: Text(emoji, style: const TextStyle(fontSize: 16)),
-                    );
-                  }
-                  return null;
-                },
+        // 🍋 NEW ANIMATION STEP: Scale and Fade implementation for the Calendar Card container
+        AnimatedOpacity(
+          opacity: _calendarAnimated ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutBack,
+          child: AnimatedScale(
+            scale: _calendarAnimated ? 1.0 : 0.95,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutBack,
+            child: Card(
+              elevation: 0,
+              color: Colors.yellow[50],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
               ),
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-                titleTextStyle: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: TableCalendar(
+                  firstDay: DateTime.utc(2023, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  focusedDay: _focusedDay,
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
+                  },
+
+                  eventLoader: getEvents,
+
+                  calendarBuilders: CalendarBuilders(
+                    markerBuilder: (context, date, events) {
+                      if (events.isNotEmpty) {
+                        final entry = events.last as Map<String, dynamic>;
+                        String emoji = entry['emoji'] ?? '🍋';
+                        return Positioned(
+                          bottom: -2,
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        );
+                      }
+                      return null;
+                    },
+                  ),
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    todayDecoration: BoxDecoration(
+                      color: Colors.yellow[300],
+                      shape: BoxShape.circle,
+                    ),
+                    selectedDecoration: BoxDecoration(
+                      color: Colors.yellow[700],
+                      shape: BoxShape.circle,
+                    ),
+                    markerDecoration: const BoxDecoration(),
+                  ),
                 ),
-              ),
-              calendarStyle: CalendarStyle(
-                todayDecoration: BoxDecoration(
-                  color: Colors.yellow[300],
-                  shape: BoxShape.circle,
-                ),
-                selectedDecoration: BoxDecoration(
-                  color: Colors.yellow[700],
-                  shape: BoxShape.circle,
-                ),
-                markerDecoration: const BoxDecoration(),
               ),
             ),
           ),
@@ -246,7 +263,6 @@ class _CalendarViewState extends State<CalendarView> {
   // TAB 2: DAILY NOTES & ANALYTICS
   // ==========================================
   Widget _buildNotesTab(List<Map<String, dynamic>> dailyEvents) {
-    // Mini Analytics Logic: Count how many times each emoji appears!
     Map<String, int> moodTallies = {};
     for (var entry in dailyEvents) {
       String emoji = entry['emoji'] ?? '🍋';
@@ -298,54 +314,62 @@ class _CalendarViewState extends State<CalendarView> {
                     String note = entry['note'] ?? '';
                     List<dynamic> tags = entry['tags'] ?? [];
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                    // 🍋 NEW ANIMATION STEP: Applied the staggered wrapper to fluidly deploy calendar notes
+                    return CalendarFadeInSlideItem(
+                      index: index,
+                      // We give it a key based on the day string so it re-triggers the ripple when you click a different date!
+                      key: ValueKey(
+                        '${_formatDate(_selectedDay ?? _focusedDay)}_$index',
                       ),
-                      color: Colors.yellow[100],
-                      elevation: 0,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Text(
-                          emoji,
-                          style: const TextStyle(fontSize: 32),
+                      child: Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        title: Text(
-                          mood,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                        color: Colors.yellow[100],
+                        elevation: 0,
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 32),
                           ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (note.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                note,
-                                style: TextStyle(color: Colors.grey[800]),
-                              ),
-                            ],
-                            if (tags.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 4,
-                                children: tags
-                                    .map(
-                                      (tag) => Text(
-                                        '#$tag',
-                                        style: TextStyle(
-                                          color: Colors.yellow[800],
-                                          fontWeight: FontWeight.bold,
+                          title: Text(
+                            mood,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (note.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  note,
+                                  style: TextStyle(color: Colors.grey[800]),
+                                ),
+                              ],
+                              if (tags.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 4,
+                                  children: tags
+                                      .map(
+                                        (tag) => Text(
+                                          '#$tag',
+                                          style: TextStyle(
+                                            color: Colors.yellow[800],
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
+                                      )
+                                      .toList(),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     );
@@ -400,6 +424,53 @@ class _CalendarViewState extends State<CalendarView> {
           ),
         ],
       ],
+    );
+  }
+}
+
+// 🍋 NEW WIDGET PARADIGM: Staggers notes sequentially whenever a user interacts with different calendar timelines
+class CalendarFadeInSlideItem extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const CalendarFadeInSlideItem({
+    super.key,
+    required this.index,
+    required this.child,
+  });
+
+  @override
+  State<CalendarFadeInSlideItem> createState() =>
+      _CalendarFadeInSlideItemState();
+}
+
+class _CalendarFadeInSlideItemState extends State<CalendarFadeInSlideItem> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: widget.index * 40), () {
+      if (mounted) {
+        setState(() {
+          _visible = true;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _visible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutQuad,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutQuad,
+        margin: EdgeInsets.only(top: _visible ? 0.0 : 15.0),
+        child: widget.child,
+      ),
     );
   }
 }
