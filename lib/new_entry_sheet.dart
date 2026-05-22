@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt; // 🍋 Import Speech engine [cite: 113]
-import 'cloud_service.dart'; // 🍋 Import our database engine! [cite: 113]
+import 'package:speech_to_text/speech_to_text.dart' as stt; 
+import 'package:audioplayers/audioplayers.dart'; // 🍋 NEW: Import the Audio Players package!
+import 'cloud_service.dart'; 
 
 class NewEntrySheet extends StatefulWidget {
   const NewEntrySheet({super.key});
@@ -9,18 +10,27 @@ class NewEntrySheet extends StatefulWidget {
   State<NewEntrySheet> createState() => _NewEntrySheetState();
 }
 
-class _NewEntrySheetState extends State<NewEntrySheet> {
-  String? _selectedMood; // [cite: 115]
-  final TextEditingController _noteController = TextEditingController(); // [cite: 115]
-  final TextEditingController _tagController = TextEditingController(); // [cite: 115]
-  final List<String> _tags = []; // [cite: 116]
+class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateMixin {
+  String? _selectedMood; 
+  final TextEditingController _noteController = TextEditingController(); 
+  final TextEditingController _tagController = TextEditingController(); 
+  final List<String> _tags = []; 
   
-  bool _isSaving = false; // [cite: 116]
+  bool _isSaving = false; 
 
-  // 🍋 Speech to text variables [cite: 116]
-  late stt.SpeechToText _speech; // [cite: 116]
-  bool _isListening = false; // [cite: 117]
-  bool _speechEnabled = false; // [cite: 117]
+  // Speech to text variables
+  late stt.SpeechToText _speech; 
+  bool _isListening = false; 
+  bool _speechEnabled = false; 
+
+  // Fluid Animation Utilities
+  bool _showSuccessAnimation = false;
+  late AnimationController _successController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _rotationAnimation;
+
+  // 🍋 NEW: Audio Engine Controller
+  late AudioPlayer _audioPlayer;
 
   List<Map<String, String>> _moods = [
     {'label': 'Happy', 'emoji': '😊'},
@@ -28,131 +38,164 @@ class _NewEntrySheetState extends State<NewEntrySheet> {
     {'label': 'Sad', 'emoji': '😢'},
     {'label': 'Angry', 'emoji': '😡'},
     {'label': 'Anxious', 'emoji': '😨'},
-  ]; // [cite: 117]
+  ]; 
 
   @override
   void initState() {
-    super.initState(); // [cite: 118]
-    _speech = stt.SpeechToText(); // [cite: 118]
-    _initSpeech(); // Start speech services on widget load [cite: 118, 119]
+    super.initState(); 
+    _speech = stt.SpeechToText(); 
+    _initSpeech(); 
+
+    // 🍋 Initialize the Audio Player
+    _audioPlayer = AudioPlayer();
+
+    // Initialize the success orchestration timeline controller
+    _successController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+
+    _scaleAnimation = CurvedAnimation(
+      parent: _successController,
+      curve: Curves.easeOutBack,
+    );
+
+    _rotationAnimation = Tween<double>(begin: -0.2, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _successController,
+        curve: Curves.elasticOut,
+      ),
+    );
   }
 
-  // 🍋 Initialize phone hardware speech engine safely [cite: 119]
+  @override
+  void dispose() {
+    _successController.dispose();
+    _audioPlayer.dispose(); // 🍋 NEW: Clean up the audio hardware when sheet closes
+    _noteController.dispose();
+    _tagController.dispose();
+    super.dispose();
+  }
+
+  // 🍋 NEW: Play the success sound tracking from local assets pool
+  void _playSuccessSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('success.mp3'));
+    } catch (e) {
+      print("Audio Playback Error: $e");
+    }
+  }
+
   void _initSpeech() async {
     try {
       bool available = await _speech.initialize(
         onError: (val) => print('Speech Init Error: $val'),
         onStatus: (val) => print('Speech Init Status: $val'),
-      ); // [cite: 119]
+      ); 
       if (mounted) {
         setState(() {
-          _speechEnabled = available; // [cite: 120]
+          _speechEnabled = available; 
         });
       }
     } catch (e) {
-      print("Speech Initialization Failed completely: $e"); // [cite: 121]
+      print("Speech Initialization Failed completely: $e"); 
     }
   }
 
-  // 🍋 Microphone record execution loop [cite: 122]
   void _toggleListening() async {
     if (!_isListening) {
-      bool available = await _speech.initialize(); // [cite: 122]
+      bool available = await _speech.initialize(); 
       if (available) {
-        setState(() => _isListening = true); // [cite: 123]
-        // Save whatever user already typed out so we don't clear it! [cite: 124]
-        String baseText = _noteController.text; // [cite: 124]
+        setState(() => _isListening = true); 
+        String baseText = _noteController.text; 
         _speech.listen(
           onResult: (val) {
             setState(() {
-              // Append newly spoken words seamlessly to old note inputs! [cite: 125]
               if (val.recognizedWords.isNotEmpty) {
                 _noteController.text = baseText.isEmpty 
-                    ? val.recognizedWords // [cite: 125]
-                    : '$baseText ${val.recognizedWords}'; // [cite: 126]
+                    ? val.recognizedWords 
+                    : '$baseText ${val.recognizedWords}'; 
                 
-                // Keep the typing selection cursor right at the end of the text [cite: 126]
                 _noteController.selection = TextSelection.fromPosition(
-                  TextPosition(offset: _noteController.text.length), // [cite: 127]
+                  TextPosition(offset: _noteController.text.length), 
                 );
               }
             });
           },
         );
       } else {
-        _showMicError("Microphone hardware or device permissions not granted."); // [cite: 128]
+        _showMicError("Microphone hardware or device permissions not granted."); 
       }
     } else {
-      // User tapped button again, stop the session [cite: 129]
-      _speech.stop(); // [cite: 129]
-      setState(() => _isListening = false); // [cite: 130]
+      _speech.stop(); 
+      setState(() => _isListening = false); 
     }
   }
 
   void _showMicError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent), // [cite: 130]
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent), 
     );
   }
 
   void _addTag(String tag) {
     if (tag.trim().isNotEmpty && !_tags.contains(tag.trim())) {
       setState(() {
-        _tags.add(tag.trim()); // [cite: 131]
+        _tags.add(tag.trim()); 
       });
-      _tagController.clear(); // [cite: 132]
+      _tagController.clear(); 
     }
   }
 
   void _showAddCustomMoodDialog() {
-    final TextEditingController customEmojiController = TextEditingController(); // [cite: 132]
-    final TextEditingController customLabelController = TextEditingController(); // [cite: 133]
+    final TextEditingController customEmojiController = TextEditingController(); 
+    final TextEditingController customLabelController = TextEditingController(); 
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Add Custom Mood'), // [cite: 133]
+          title: const Text('Add Custom Mood'), 
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: customEmojiController, // [cite: 134]
+                controller: customEmojiController, 
                 decoration: const InputDecoration(
-                  labelText: 'Emoji (e.g., 🍕)', // [cite: 134]
+                  labelText: 'Emoji (e.g., 🍕)', 
                   hintText: 'Enter an emoji',
                 ),
-                maxLength: 2, // [cite: 135]
+                maxLength: 2, 
               ),
               TextField(
-                controller: customLabelController, // [cite: 135]
+                controller: customLabelController, 
                 decoration: const InputDecoration(
-                  labelText: 'Label (e.g., Hungry)', // [cite: 135]
-                  hintText: 'Enter a feeling', // [cite: 136]
+                  labelText: 'Label (e.g., Hungry)', 
+                  hintText: 'Enter a feeling', 
                 ),
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // [cite: 137]
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)), // [cite: 137]
+              onPressed: () => Navigator.pop(context), 
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)), 
             ),
             ElevatedButton(
               onPressed: () {
-                final emoji = customEmojiController.text.trim(); // [cite: 137]
-                final label = customLabelController.text.trim(); // [cite: 138]
+                final emoji = customEmojiController.text.trim(); 
+                final label = customLabelController.text.trim(); 
 
                 if (emoji.isNotEmpty && label.isNotEmpty) {
                   setState(() {
-                    _moods.add({'label': label, 'emoji': emoji}); // [cite: 138]
-                    _selectedMood = label; // [cite: 138]
+                    _moods.add({'label': label, 'emoji': emoji}); 
+                    _selectedMood = label; 
                   });
-                  Navigator.pop(context); // [cite: 139]
+                  Navigator.pop(context); 
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[600]), // [cite: 139]
-              child: const Text('Add', style: TextStyle(color: Colors.black)), // [cite: 139]
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[600]), 
+              child: const Text('Add', style: TextStyle(color: Colors.black)), 
             ),
           ],
         );
@@ -163,235 +206,299 @@ class _NewEntrySheetState extends State<NewEntrySheet> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // [cite: 140]
+      backgroundColor: Colors.white, 
       
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0), // [cite: 140]
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, // [cite: 140]
-            children: [
-              const SizedBox(height: 35), // Your perfect manually adjusted height block! [cite: 141]
-
-              // --- Header inside the safe area ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // [cite: 141]
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0), 
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, 
                 children: [
-                  const Text('New Entry', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)), // [cite: 142]
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black, size: 28), // [cite: 142]
-                    onPressed: () {
-                      if (_isListening) _speech.stop(); // Stop mic if closed abruptly [cite: 143]
-                      Navigator.pop(context); // [cite: 143]
-                    }, 
+                  const SizedBox(height: 35), 
+
+                  // --- Header inside the safe area ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                    children: [
+                      const Text('New Entry', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)), 
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.black, size: 28), 
+                        onPressed: () {
+                          if (_isListening) _speech.stop(); 
+                          Navigator.pop(context); 
+                        }, 
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 24), // [cite: 144]
+                  const SizedBox(height: 24), 
 
-              // --- Mood Selector ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // [cite: 145]
-                children: [
-                  ..._moods.map((mood) {
-                    final isSelected = _selectedMood == mood['label']; // [cite: 145]
-                    
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 6.0), // [cite: 146]
-                        child: GestureDetector(
-                          onTap: () => setState(() => _selectedMood = mood['label']), // [cite: 147]
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10), // [cite: 147]
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.yellow[100] : Colors.grey[50], // [cite: 148]
-                              border: Border.all(
-                                color: isSelected ? Colors.yellow[700]! : Colors.grey[200]!, // [cite: 149, 150]
-                                width: 2,
+                  // --- Mood Selector ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                    children: [
+                      ..._moods.map((mood) {
+                        final isSelected = _selectedMood == mood['label']; 
+                        
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 6.0), 
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedMood = mood['label']), 
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10), 
+                                decoration: BoxDecoration(
+                                  color: isSelected ? Colors.yellow[100] : Colors.grey[50], 
+                                  border: Border.all(
+                                    color: isSelected ? Colors.yellow[700]! : Colors.grey[200]!, 
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12), 
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(mood['emoji']!, style: const TextStyle(fontSize: 26)), 
+                                    const SizedBox(height: 2), 
+                                    Text(
+                                      mood['label']!, 
+                                      style: TextStyle(
+                                        fontSize: 10, 
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal 
+                                      ),
+                                      overflow: TextOverflow.ellipsis, 
+                                    ),
+                                  ],
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(12), // [cite: 150]
+                            ),
+                          ),
+                        );
+                      }), 
+
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _showAddCustomMoodDialog, 
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10), 
+                            decoration: BoxDecoration(
+                              color: Colors.white, 
+                              border: Border.all(color: Colors.grey[300]!, width: 2), 
+                              borderRadius: BorderRadius.circular(12), 
                             ),
                             child: Column(
                               children: [
-                                Text(mood['emoji']!, style: const TextStyle(fontSize: 26)), // [cite: 152]
-                                const SizedBox(height: 2), // [cite: 152]
-                                Text(
-                                  mood['label']!, // [cite: 153]
-                                  style: TextStyle(
-                                    fontSize: 10, // [cite: 153]
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal // [cite: 154]
-                                  ),
-                                  overflow: TextOverflow.ellipsis, // [cite: 155]
+                                Icon(Icons.add, size: 30, color: Colors.grey[400]), 
+                                const SizedBox(height: 2), 
+                                const Text(
+                                  'Custom', 
+                                  style: TextStyle(fontSize: 10, color: Colors.grey), 
+                                  overflow: TextOverflow.ellipsis, 
                                 ),
                               ],
                             ),
                           ),
                         ),
                       ),
-                    );
-                  }), 
+                    ],
+                  ),
+                  const SizedBox(height: 24), 
 
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _showAddCustomMoodDialog, // [cite: 157]
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10), // [cite: 158]
+                  // --- Notes Field Header and Mic Action Row ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "What's on your mind? (optional)", 
+                        style: TextStyle(fontWeight: FontWeight.bold) 
+                      ),
+                      Container(
                         decoration: BoxDecoration(
-                          color: Colors.white, // [cite: 158]
-                          border: Border.all(color: Colors.grey[300]!, width: 2), // [cite: 158]
-                          borderRadius: BorderRadius.circular(12), // [cite: 159]
+                          color: _isListening ? Colors.red[50] : Colors.yellow[100], 
+                          shape: BoxShape.circle, 
                         ),
-                        child: Column(
-                          children: [
-                            Icon(Icons.add, size: 30, color: Colors.grey[400]), // [cite: 160]
-                            const SizedBox(height: 2), // [cite: 160]
-                            const Text(
-                              'Custom', // [cite: 161]
-                              style: TextStyle(fontSize: 10, color: Colors.grey), // [cite: 161]
-                              overflow: TextOverflow.ellipsis, // [cite: 161]
-                            ),
-                          ],
+                        child: IconButton(
+                          icon: Icon(
+                            _isListening ? Icons.stop : Icons.mic, 
+                            color: _isListening ? Colors.red : Colors.yellow[800], 
+                            size: 20, 
+                          ),
+                          onPressed: _isSaving ? null : _toggleListening, 
+                          tooltip: _isListening ? 'Stop listening' : 'Record voice note', 
+                          constraints: const BoxConstraints(), 
+                          padding: const EdgeInsets.all(8), 
                         ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8), 
+                  
+                  Expanded(
+                    child: TextField(
+                      controller: _noteController, 
+                      maxLines: null, 
+                      expands: true,  
+                      textAlignVertical: TextAlignVertical.top, 
+                      decoration: InputDecoration(
+                        hintText: 'Write a note...', 
+                        filled: true, 
+                        fillColor: Colors.grey[50], 
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20), 
+
+                  // --- Tags Field ---
+                  const Text("Add tags (optional)", style: TextStyle(fontWeight: FontWeight.bold)), 
+                  const SizedBox(height: 8), 
+                  TextField(
+                    controller: _tagController, 
+                    decoration: InputDecoration(
+                      hintText: 'Type a tag and press enter', 
+                      filled: true, 
+                      fillColor: Colors.grey[50], 
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+                    ),
+                    onSubmitted: _addTag, 
+                  ),
+                  const SizedBox(height: 12), 
+                  
+                  Wrap(
+                    spacing: 8, 
+                    children: _tags.map((tag) => Chip(
+                      label: Text(tag), 
+                      onDeleted: () => setState(() => _tags.remove(tag)), 
+                      backgroundColor: Colors.white, 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), 
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 16), 
                 ],
               ),
-              const SizedBox(height: 24), // [cite: 163]
-
-              // --- Notes Field Header and Mic Action Row ---
-              // 🍋 NEW: Bound the section title and microphone button together in a responsive Row!
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "What's on your mind? (optional)", 
-                    style: TextStyle(fontWeight: FontWeight.bold) // [cite: 164]
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _isListening ? Colors.red[50] : Colors.yellow[100], // [cite: 169, 170]
-                      shape: BoxShape.circle, // [cite: 170]
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        _isListening ? Icons.stop : Icons.mic, // [cite: 171]
-                        color: _isListening ? Colors.red : Colors.yellow[800], // [cite: 171]
-                        size: 20, // Clean, proportional scaling next to the text
-                      ),
-                      onPressed: _isSaving ? null : _toggleListening, // [cite: 172]
-                      tooltip: _isListening ? 'Stop listening' : 'Record voice note', // [cite: 173]
-                      constraints: const BoxConstraints(), // Removes extra button padding bloating the row
-                      padding: const EdgeInsets.all(8), // Tight, uniform circle padding bounding the icon
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8), // [cite: 164]
-              
-              Expanded(
-                child: TextField(
-                  controller: _noteController, // [cite: 164]
-                  maxLines: null, // [cite: 165]
-                  expands: true,  // [cite: 165]
-                  textAlignVertical: TextAlignVertical.top, // [cite: 165]
-                  decoration: InputDecoration(
-                    hintText: 'Write a note...', // [cite: 165]
-                    filled: true, // [cite: 166]
-                    fillColor: Colors.grey[50], // [cite: 166]
-                    // 🍋 REMOVED: suffixIcon structure deleted to maximize available character printing lines!
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), // [cite: 166]
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20), // [cite: 174]
-
-              // --- Tags Field ---
-              const Text("Add tags (optional)", style: TextStyle(fontWeight: FontWeight.bold)), // [cite: 175]
-              const SizedBox(height: 8), // [cite: 175]
-              TextField(
-                controller: _tagController, // [cite: 175]
-                decoration: InputDecoration(
-                  hintText: 'Type a tag and press enter', // [cite: 176]
-                  filled: true, // [cite: 176]
-                  fillColor: Colors.grey[50], // [cite: 176]
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), // [cite: 176]
-                ),
-                onSubmitted: _addTag, // [cite: 176]
-              ),
-              const SizedBox(height: 12), // [cite: 177]
-              
-              Wrap(
-                spacing: 8, // [cite: 177]
-                children: _tags.map((tag) => Chip(
-                  label: Text(tag), // [cite: 178]
-                  onDeleted: () => setState(() => _tags.remove(tag)), // [cite: 178]
-                  backgroundColor: Colors.white, // [cite: 178]
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), // [cite: 178]
-                )).toList(),
-              ),
-              const SizedBox(height: 16), // [cite: 179]
-            ],
+            ),
           ),
-        ),
+
+          // --- Animated Success Overlay ---
+          if (_showSuccessAnimation)
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 250),
+                builder: (context, opacityValue, child) {
+                  return Opacity(
+                    opacity: opacityValue,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  color: Colors.white.withOpacity(0.97),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ScaleTransition(
+                          scale: _scaleAnimation,
+                          child: RotationTransition(
+                            turns: _rotationAnimation,
+                            child: const Text('🍋', style: TextStyle(fontSize: 110)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 15.0, end: 0.0),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, slideValue, child) {
+                            return Transform.translate(
+                              offset: Offset(0, slideValue),
+                              child: child,
+                            );
+                          },
+                          child: const Text(
+                            'Squeezed Successfully!',
+                            style: TextStyle(
+                              fontSize: 24, 
+                              fontWeight: FontWeight.bold, 
+                              color: Colors.black,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
 
-      // --- Action Buttons perfectly docked at the bottom ---
+      // --- Action Buttons docked at the bottom ---
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), // [cite: 180]
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), 
           child: Row(
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed: () {
-                    if (_isListening) _speech.stop(); // [cite: 180]
-                    Navigator.pop(context); // [cite: 181]
+                  onPressed: _isSaving ? null : () {
+                    if (_isListening) _speech.stop(); 
+                    Navigator.pop(context); 
                   },
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 16)), // [cite: 181]
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 16)), 
                 ),
               ),
-              const SizedBox(width: 16), // [cite: 181]
+              const SizedBox(width: 16), 
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : () async { // [cite: 182]
+                  onPressed: _isSaving ? null : () async { 
                     if (_selectedMood == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please select a mood first!')), // [cite: 182, 183]
+                        const SnackBar(content: Text('Please select a mood first!')), 
                       );
                       return;
                     }
 
-                    // Turn off active mic sessions safely before running cloud push logic
                     if (_isListening) {
-                      _speech.stop(); // [cite: 184]
-                      setState(() => _isListening = false); // [cite: 184]
+                      _speech.stop(); 
+                      setState(() => _isListening = false); 
                     }
 
                     setState(() {
-                      _isSaving = true; // [cite: 185]
+                      _isSaving = true; 
                     });
 
-                    final emoji = _moods.firstWhere((m) => m['label'] == _selectedMood)['emoji']!; // [cite: 185]
+                    final emoji = _moods.firstWhere((m) => m['label'] == _selectedMood)['emoji']!; 
                     await CloudService.saveMoodEntry(
-                      _selectedMood!, // [cite: 186]
-                      emoji, // [cite: 186]
-                      _noteController.text.trim(), // [cite: 186]
-                      List.from(_tags), // [cite: 186]
+                      _selectedMood!, 
+                      emoji, 
+                      _noteController.text.trim(), 
+                      List.from(_tags), 
                     );
 
+                    if (mounted) {
+                      setState(() {
+                        _showSuccessAnimation = true;
+                      });
+                      _successController.forward();
+                      _playSuccessSound(); // 🍋 NEW: Fire the audio playback engine synchronously!
+                    }
+
+                    await Future.delayed(const Duration(milliseconds: 1400));
+
                     if (context.mounted) {
-                      Navigator.pop(context, true); // [cite: 188]
+                      Navigator.pop(context, true); 
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow[600], // [cite: 189]
-                    padding: const EdgeInsets.symmetric(vertical: 16), // [cite: 189]
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // [cite: 190]
+                    backgroundColor: Colors.yellow[600], 
+                    padding: const EdgeInsets.symmetric(vertical: 16), 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
                   ),
                   child: Text(
-                    _isSaving ? 'Saving...' : 'Save', // [cite: 190]
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16) // [cite: 190]
+                    _isSaving ? 'Saving...' : 'Save', 
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16) 
                   ),
                 ),
               ),
