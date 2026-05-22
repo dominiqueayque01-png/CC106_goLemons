@@ -66,5 +66,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>goLemons needs microphone access to translate your voice journals into text notes.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>goLemons needs speech recognition access to transcribe your spoken notes.</string>
 </dict>
 </plist>

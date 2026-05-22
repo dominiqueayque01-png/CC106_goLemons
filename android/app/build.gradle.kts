@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.example.mobile_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -23,12 +23,14 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.mobile_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        
+        // 🍋 OVERRIDE: Forced to 24 so the Speech-to-Text plugin can safely compile!
+        minSdk = 24 
+        
+        // 🍋 OVERRIDE: Set target SDK to 34 to pass modern Android compilation rules
+        targetSdk = 36 
+        
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
