@@ -11,9 +11,11 @@ class HomeView extends StatefulWidget {
   State<HomeView> createState() => _HomeViewState();
 }
 
-// 🍋 OPTIMIZATION 1: Added 'AutomaticKeepAliveClientMixin' to freeze this tab in memory when you swipe away!
 class _HomeViewState extends State<HomeView>
     with AutomaticKeepAliveClientMixin {
+  bool _headerAnimated = false;
+  bool _cardAnimated = false;
+
   final List<String> _motivations = [
     "A fresh week, a fresh start. Let's go!",
     "Small steps every day lead to big results.",
@@ -23,6 +25,21 @@ class _HomeViewState extends State<HomeView>
     "Take a deep breath. You're doing great.",
     "Tracking your mood is a form of self-care.",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (mounted) setState(() => _headerAnimated = true);
+        });
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted) setState(() => _cardAnimated = true);
+        });
+      }
+    });
+  }
 
   int _calculateStreak(List<DateTime> allDates) {
     if (allDates.isEmpty) return 0;
@@ -57,37 +74,29 @@ class _HomeViewState extends State<HomeView>
       } else if (i == 0 &&
           uniqueDates[i] ==
               currentDateToCheck.subtract(const Duration(days: 1))) {
-        streak++;
-        currentDateToCheck = currentDateToCheck.subtract(
-          const Duration(days: 2),
-        );
-      } else {
         break;
       }
     }
     return streak;
   }
 
-  // 🍋 OPTIMIZATION 2: You MUST override wantKeepAlive and return true!
   @override
   bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    // 🍋 OPTIMIZATION 3: You MUST call super.build(context) at the top of your build method!
     super.build(context);
 
-    final brandColor = Colors.yellow[600]!;
     String dailyQuote = _motivations[DateTime.now().weekday - 1];
-
     final user = FirebaseAuth.instance.currentUser;
+
     if (user == null) {
       return const Center(child: Text("Please log in to see your dashboard."));
     }
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
@@ -110,7 +119,6 @@ class _HomeViewState extends State<HomeView>
 
             final cloudEntries = snapshot.hasData ? snapshot.data!.docs : [];
 
-            // --- DATA PROCESSING ---
             List<DateTime> allDates = cloudEntries.map((doc) {
               return (doc['date'] as Timestamp).toDate();
             }).toList();
@@ -124,115 +132,256 @@ class _HomeViewState extends State<HomeView>
                   d.day == today.day;
             }).toList();
 
-            // --- THE UI ---
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- 1. The Greeting ---
-                const Text(
-                  'Hello! 👋',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'How are you feeling today?',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 24),
-
-                // --- 2. The Daily Streak Hero Card ---
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: brandColor,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: brandColor.withOpacity(0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Your Momentum',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  '🔥 ',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                                Text(
-                                  '$currentStreak Days',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black,
-                                    fontSize: 16,
+                const SizedBox(height: 12),
+                
+                // --- 1. The Branded App Top Bar ---
+                AnimatedOpacity(
+                  opacity: _headerAnimated ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeInOut,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
+                    margin: EdgeInsets.only(
+                      bottom: _headerAnimated ? 0.0 : 10.0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: const [
+                                  Text(
+                                    '🍋',
+                                    style: TextStyle(fontSize: 18),
                                   ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'goLemons',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: -0.3,
+                                      color: Color.fromARGB(255, 143, 115, 4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'How are you feeling today?',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
                                 ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.notifications_outlined,
+                                size: 22,
+                                color: Color.fromARGB(255, 143, 115, 4),
+                              ),
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.only(right: 8),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("No new notifications! 🍋"),
+                                  ),
+                                );
+                              },
+                            ),
+                            // 🍋 NEW: Dynamic Stream Profile Picture Loader!
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(user.uid)
+                                  .snapshots(),
+                              builder: (context, userSnapshot) {
+                                String? profileImageUrl;
+                                if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                                  final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                                  profileImageUrl = userData['profileImageUrl'] as String?;
+                                }
+
+                                return CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: Colors.yellow[100],
+                                  backgroundImage: profileImageUrl != null && profileImageUrl.isNotEmpty
+                                      ? NetworkImage(profileImageUrl)
+                                      : null,
+                                  child: (profileImageUrl == null || profileImageUrl.isEmpty)
+                                      ? const Text(
+                                          '🍋',
+                                          style: TextStyle(fontSize: 14),
+                                        )
+                                      : null,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // --- 2. The Daily Streak Hero Card (Compact Design) ---
+                AnimatedOpacity(
+                  opacity: _cardAnimated ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeInOut,
+                  child: AnimatedScale(
+                    scale: _cardAnimated ? 1.0 : 0.95,
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutBack,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.yellow[400]!, Colors.yellow[600]!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.yellow[600]!.withOpacity(0.25),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Your Momentum',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      '🔥 ',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    Text(
+                                      '$currentStreak Days',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.black87,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            dailyQuote,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                              height: 1.25,
+                              letterSpacing: -0.3,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      Text(
-                        dailyQuote,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
-                // --- 3. Today's Dashboard List ---
+                // --- 3. Today's Dashboard List Layout ---
                 const Text(
                   "Today's Squeezes",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
 
                 Expanded(
-                  // 🍋 OPTIMIZATION 4: Wrapped the animated list in a RepaintBoundary so sliding transitions don't force heavy layout redraws!
                   child: RepaintBoundary(
                     child: todaysDocs.isEmpty
                         ? Center(
-                            child: Text(
-                              "You haven't logged anything today yet!",
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontStyle: FontStyle.italic,
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Opacity(
+                                  opacity: 0.5,
+                                  child: Text(
+                                    '🍋',
+                                    style: TextStyle(fontSize: 44),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  "No squeezes yet today.",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Tap the + button to log your mood!",
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.builder(
+                            physics: const BouncingScrollPhysics(),
                             itemCount: todaysDocs.length,
                             itemBuilder: (context, index) {
                               var document = todaysDocs[index];
@@ -246,55 +395,95 @@ class _HomeViewState extends State<HomeView>
 
                               return FadeInSlideListItem(
                                 index: index,
-                                child: Card(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  color: Colors.yellow[50],
-                                  elevation: 0,
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.all(16),
-                                    leading: Text(
-                                      emoji,
-                                      style: const TextStyle(fontSize: 32),
-                                    ),
-                                    title: Text(
-                                      mood,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      ModernFadeRoute(
+                                        page: EntryDetailsView(
+                                          documentId: docId,
+                                          mood: mood,
+                                          emoji: emoji,
+                                          initialNote: note,
+                                          dateString: "Today",
+                                        ),
                                       ),
+                                    );
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.yellow[200]!,
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.yellow[600]!
+                                              .withOpacity(0.03),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
                                     ),
-                                    subtitle: note.isNotEmpty
-                                        ? Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 8.0,
-                                            ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          height: 48,
+                                          width: 48,
+                                          decoration: BoxDecoration(
+                                            color: Colors.yellow[50],
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
                                             child: Text(
-                                              note,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: Colors.grey[800],
+                                              emoji,
+                                              style: const TextStyle(
+                                                fontSize: 24,
                                               ),
                                             ),
-                                          )
-                                        : null,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        ModernFadeRoute(
-                                          page: EntryDetailsView(
-                                            documentId: docId,
-                                            mood: mood,
-                                            emoji: emoji,
-                                            initialNote: note,
-                                            dateString: "Today",
                                           ),
                                         ),
-                                      );
-                                    },
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                mood,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              if (note.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  note,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: Colors.grey[600],
+                                                    height: 1.25,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.chevron_right,
+                                          color: Colors.grey[300],
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               );
@@ -331,7 +520,7 @@ class _FadeInSlideListItemState extends State<FadeInSlideListItem> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration(milliseconds: widget.index * 50), () {
+    Future.delayed(Duration(milliseconds: 250 + (widget.index * 60)), () {
       if (mounted) {
         setState(() {
           _isVisible = true;
@@ -344,12 +533,12 @@ class _FadeInSlideListItemState extends State<FadeInSlideListItem> {
   Widget build(BuildContext context) {
     return AnimatedOpacity(
       opacity: _isVisible ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 550),
+      curve: Curves.easeInOut,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 500),
+        duration: const Duration(milliseconds: 550),
         curve: Curves.easeOutCubic,
-        margin: EdgeInsets.only(top: _isVisible ? 0.0 : 20.0),
+        margin: EdgeInsets.only(top: _isVisible ? 0.0 : 16.0),
         child: widget.child,
       ),
     );

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; 
 import 'package:image_picker/image_picker.dart';
 import 'login_view.dart';
 
@@ -14,84 +15,295 @@ class ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<ProfileView> {
   File? _selectedImage;
-  // 🍋 NEW: Track the loading state for signing out!
   bool _isSigningOut = false;
+  bool _isUploadingImage = false; 
+  bool _isPickerActive = false; 
 
   Future<void> _pickProfilePicture() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (_isPickerActive) return; 
+    _isPickerActive = true; 
 
-    if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+          _isUploadingImage = true;
+        });
+
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null){
+          setState(() => _isUploadingImage = false); 
+          return;
+        }
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('profile_pictures')
+            .child('${user.uid}.jpg');
+
+        await storageRef.putFile(_selectedImage!);
+        final downloadUrl = await storageRef.getDownloadURL();
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({'profileImageUrl': downloadUrl});
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile picture saved! 🍋'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      print("Failed to pick or upload profile picture: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to open gallery or save picture.'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      _isPickerActive = false; 
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
     }
   }
 
-  // 🍋 NEW: The Confirmation Modal & Logout Logic
+  void _showEditProfileSheet(String currentName, String currentUsername) {
+    final TextEditingController nameController = TextEditingController(text: currentName);
+    final TextEditingController usernameController = TextEditingController(text: currentUsername);
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)), // 🍋 Tighter, matching aesthetic corners
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Edit Profile',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 22),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _pickProfilePicture();
+                      },
+                      icon: const Icon(Icons.camera_alt, color: Colors.black87, size: 18),
+                      label: const Text('Change Profile Photo', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 13)),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.yellow[50],
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  const Text("Full Name", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  const Text("Username", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.black87)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: usernameController,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey[50],
+                      prefixText: '@ ',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      prefixStyle: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isSaving ? null : () async {
+                        final newName = nameController.text.trim();
+                        final newUsername = usernameController.text.trim();
+
+                        if (newName.isEmpty || newUsername.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Fields cannot be empty!')),
+                          );
+                          return;
+                        }
+
+                        setSheetState(() => isSaving = true);
+
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+                            'fullName': newName,
+                            'username': newUsername,
+                          });
+                        }
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Profile updated! 🍋'), backgroundColor: Colors.green),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.yellow[600],
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(
+                        isSaving ? 'Saving...' : 'Save Changes',
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSettingsMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)), // 🍋 Sharp modern aesthetic
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Settings',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
+                ),
+                const SizedBox(height: 16),
+                
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.red[50], shape: BoxShape.circle),
+                    child: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                  ),
+                  title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Colors.redAccent)),
+                  onTap: () {
+                    Navigator.pop(context); 
+                    _handleSignOut();
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleSignOut() async {
-    // 1. Show the dialog and wait for the user's choice
     final bool? shouldSignOut = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          backgroundColor: Colors.white,
           title: const Row(
             children: [
-              Icon(Icons.logout, color: Colors.redAccent),
+              Icon(Icons.logout, color: Colors.redAccent, size: 22),
               SizedBox(width: 8),
-              Text('Sign Out'),
+              Text('Sign Out', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ],
           ),
-          content: const Text('Are you sure you want to sign out of goLemons?'),
+          content: const Text('Are you sure you want to sign out of goLemons?', style: TextStyle(fontSize: 14)),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10), // 🍋 Consistent design system
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(false), // User clicked Cancel
+              onPressed: () => Navigator.of(context).pop(false), 
               child: Text(
                 'Cancel',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
             ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(true), // User clicked Sign Out
+              onPressed: () => Navigator.of(context).pop(true), 
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text(
-                'Sign Out',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: const Text('Sign Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
             ),
           ],
         );
       },
     );
 
-    // 2. If they clicked "Cancel" or tapped outside the box, stop here!
     if (shouldSignOut != true) return;
 
-    // 3. Trigger the loading overlay
     setState(() {
       _isSigningOut = true;
     });
 
-    // Optional: Add a tiny 800ms delay so the loading screen feels natural and not glitched
     await Future.delayed(const Duration(milliseconds: 800));
-
-    // 4. Actually sign them out
     await FirebaseAuth.instance.signOut();
 
     if (!mounted) return;
@@ -104,7 +316,6 @@ class _ProfileViewState extends State<ProfileView> {
       ),
     );
 
-    // 5. Send them back to LoginView
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const LoginView()),
@@ -116,68 +327,69 @@ class _ProfileViewState extends State<ProfileView> {
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
 
-    // 🍋 NEW: Wrapped the SafeArea in a Stack to allow for the floating overlay!
     return Stack(
       children: [
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
             child: Column(
               children: [
                 Expanded(
                   child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Profile',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        // --- 1. Top Section Header (Less Size, Semi-Bold) ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Profile', 
+                              style: TextStyle(
+                                fontSize: 22, // 🍋 Cohesive scale footprint
+                                fontWeight: FontWeight.w600, // 🍋 Clean Semi-Bold
+                                color: Colors.black87,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.settings_outlined, size: 24, color: Colors.black87),
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                              onPressed: _showSettingsMenu,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
 
-                        // --- User Profile Card ---
+                        // --- 2. User Profile Card Module ---
                         if (currentUser != null)
-                          FutureBuilder<DocumentSnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(currentUser.uid)
-                                .get(),
+                          StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance.collection('users').doc(currentUser.uid).snapshots(),
                             builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.yellow,
-                                  ),
-                                );
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator(color: Colors.yellow));
                               }
 
-                              if (snapshot.hasError ||
-                                  !snapshot.hasData ||
-                                  !snapshot.data!.exists) {
-                                return const Center(
-                                  child: Text('Could not load profile data.'),
-                                );
+                              if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                                return const Center(child: Text('Could not load profile data.'));
                               }
 
-                              final userData =
-                                  snapshot.data!.data() as Map<String, dynamic>;
-                              final fullName =
-                                  userData['fullName'] ?? 'No Name';
-                              final username =
-                                  userData['username'] ?? 'No Username';
+                              final userData = snapshot.data!.data() as Map<String, dynamic>;
+                              final fullName = userData['fullName'] ?? 'No Name';
+                              final username = userData['username'] ?? 'No Username';
                               final email = userData['email'] ?? 'No Email';
+                              final profileImageUrl = userData['profileImageUrl'] as String?;
 
                               return Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.all(24),
+                                padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.grey[200]!),
+                                  borderRadius: BorderRadius.circular(10), // 🍋 Standardized 10px borders
+                                  border: Border.all(color: Colors.grey[100]!, width: 1.2),
                                 ),
                                 child: Column(
                                   children: [
@@ -185,209 +397,128 @@ class _ProfileViewState extends State<ProfileView> {
                                       alignment: Alignment.bottomRight,
                                       children: [
                                         CircleAvatar(
-                                          radius: 45,
+                                          radius: 40,
                                           backgroundColor: Colors.yellow[100],
-                                          backgroundImage:
-                                              _selectedImage != null
-                                              ? FileImage(_selectedImage!)
-                                              : null,
-                                          child: _selectedImage == null
-                                              ? const Text(
-                                                  '🍋',
-                                                  style: TextStyle(
-                                                    fontSize: 40,
-                                                  ),
-                                                )
-                                              : null,
+                                          backgroundImage: _selectedImage != null 
+                                            ? FileImage(_selectedImage!) 
+                                            : (profileImageUrl != null ? NetworkImage(profileImageUrl) : null) as ImageProvider?,
+                                          child: (_selectedImage == null && profileImageUrl == null) 
+                                            ? const Text('🍋', style: TextStyle(fontSize: 34)) 
+                                            : null,
                                         ),
+                                        if (_isUploadingImage)
+                                          Positioned.fill(
+                                            child: Container(
+                                              decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                                              child: const Center(
+                                                child: SizedBox(
+                                                  height: 20, width: 20, 
+                                                  child: CircularProgressIndicator(color: Colors.yellow, strokeWidth: 2.5)
+                                                )
+                                              ),
+                                            ),
+                                          ),
                                         GestureDetector(
-                                          onTap: _pickProfilePicture,
+                                          onTap: () => _showEditProfileSheet(fullName, username),
                                           child: Container(
-                                            padding: const EdgeInsets.all(8),
+                                            padding: const EdgeInsets.all(6),
                                             decoration: BoxDecoration(
                                               color: Colors.yellow[600],
                                               shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors.white,
-                                                width: 2,
-                                              ),
+                                              border: Border.all(color: Colors.white, width: 2),
                                             ),
-                                            child: const Icon(
-                                              Icons.camera_alt,
-                                              size: 18,
-                                              color: Colors.black87,
-                                            ),
+                                            child: const Icon(Icons.edit, size: 14, color: Colors.black87),
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 12),
                                     Text(
                                       fullName,
-                                      style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.black87),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 2),
                                     Text(
                                       '@$username',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.yellow[800],
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: TextStyle(fontSize: 14, color: Colors.yellow[800], fontWeight: FontWeight.w700),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      email,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
+                                    Text(email, style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500)),
                                   ],
                                 ),
                               );
                             },
                           ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
 
-                        // --- Your Stats Section ---
-                        const Text(
-                          'Your Stats',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        // --- 3. Stats Section Module ---
+                        const Text('Your Stats', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87)),
                         const SizedBox(height: 12),
 
                         if (currentUser != null)
                           StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(currentUser.uid)
-                                .collection('entries')
-                                .snapshots(),
+                            stream: FirebaseFirestore.instance.collection('users').doc(currentUser.uid).collection('entries').snapshots(),
                             builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.yellow,
-                                  ),
-                                );
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator(color: Colors.yellow));
                               }
 
-                              final docs = snapshot.hasData
-                                  ? snapshot.data!.docs
-                                  : [];
-
+                              final docs = snapshot.hasData ? snapshot.data!.docs : [];
                               final totalEntries = docs.length;
+                              final daysLogged = docs.map((doc) {
+                                final d = (doc['date'] as Timestamp).toDate();
+                                return DateTime(d.year, d.month, d.day);
+                              }).toSet().length;
 
-                              final daysLogged = docs
-                                  .map((doc) {
-                                    final d = (doc['date'] as Timestamp)
-                                        .toDate();
-                                    return DateTime(d.year, d.month, d.day);
-                                  })
-                                  .toSet()
-                                  .length;
-
-                              final tagsUsed = docs
-                                  .expand((doc) {
-                                    final data =
-                                        doc.data() as Map<String, dynamic>;
-                                    return (data['tags'] as List<dynamic>? ??
-                                        []);
-                                  })
-                                  .toSet()
-                                  .length;
+                              final tagsUsed = docs.expand((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                return (data['tags'] as List<dynamic>? ?? []);
+                              }).toSet().length;
 
                               return Container(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.grey[200]!),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.grey[100]!, width: 1.2),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    _buildStatColumn(
-                                      totalEntries.toString(),
-                                      'Total Entries',
-                                    ),
-                                    Container(
-                                      height: 40,
-                                      width: 1,
-                                      color: Colors.grey[300],
-                                    ),
-                                    _buildStatColumn(
-                                      daysLogged.toString(),
-                                      'Days Logged',
-                                    ),
-                                    Container(
-                                      height: 40,
-                                      width: 1,
-                                      color: Colors.grey[300],
-                                    ),
-                                    _buildStatColumn(
-                                      tagsUsed.toString(),
-                                      'Tags Used',
-                                    ),
+                                    _buildStatColumn(totalEntries.toString(), 'Total Entries'),
+                                    Container(height: 30, width: 1, color: Colors.grey[200]),
+                                    _buildStatColumn(daysLogged.toString(), 'Days Logged'),
+                                    Container(height: 30, width: 1, color: Colors.grey[200]),
+                                    _buildStatColumn(tagsUsed.toString(), 'Tags Used'),
                                   ],
                                 ),
                               );
                             },
                           ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
 
-                        // --- About Section ---
-                        const Text(
-                          'About',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        // --- 4. About Branded Section Module ---
+                        const Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87)),
                         const SizedBox(height: 12),
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.grey[200]!),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.grey[100]!, width: 1.2),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'goLemons',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
+                              const Text('goLemons', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87)),
+                              const SizedBox(height: 6),
                               Text(
                                 'Track your moods, understand your patterns, and take care of your mental wellbeing.',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  height: 1.5,
-                                ),
+                                style: TextStyle(color: Colors.grey[500], height: 1.4, fontSize: 13, fontWeight: FontWeight.w500),
                               ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Version 1.0.0',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                ),
-                              ),
+                              const SizedBox(height: 12),
+                              Text('Version 1.0.0', style: TextStyle(color: Colors.grey[400], fontSize: 11, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -396,42 +527,16 @@ class _ProfileViewState extends State<ProfileView> {
                     ),
                   ),
                 ),
-
-                // --- Sticky Sign Out Button ---
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    // 🍋 NEW: Tied the button to our fresh _handleSignOut function!
-                    onPressed: _isSigningOut ? null : _handleSignOut,
-                    icon: const Icon(Icons.logout, color: Colors.redAccent),
-                    label: const Text(
-                      'Sign Out',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 16),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Colors.redAccent),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
         ),
 
-        // 🍋 NEW: The Loading Overlay that sits on top of everything!
         if (_isSigningOut)
           Container(
-            color: Colors.white70, // Adds a nice white fade over the UI
+            color: Colors.white70,
             child: const Center(
-              child: CircularProgressIndicator(
-                color: Colors.yellow,
-                strokeWidth: 4,
-              ),
+              child: CircularProgressIndicator(color: Colors.yellow, strokeWidth: 3),
             ),
           ),
       ],
@@ -441,13 +546,10 @@ class _ProfileViewState extends State<ProfileView> {
   Widget _buildStatColumn(String value, String label) {
     return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.black87)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
       ],
     );
   }
-}
+} 

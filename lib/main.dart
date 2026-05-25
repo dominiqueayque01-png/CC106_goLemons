@@ -7,6 +7,8 @@ import 'calendar_view.dart';
 import 'insights_view.dart';
 import 'profile_view.dart';
 import 'login_view.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 
 void main() async {
   // 🍋 FIX: Ensure Flutter is initialized BEFORE Firebase and runApp!
@@ -100,7 +102,7 @@ class _MainScreenState extends State<MainScreen> {
       
       // 4. The "Squeeze" Button (Floating Action Button) - Untouched!
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.yellow[600],
+        backgroundColor: const Color.fromRGBO(253, 216, 53, 1),
         shape: const CircleBorder(), 
         onPressed: () async {
           final didSave = await showModalBottomSheet(
@@ -114,7 +116,7 @@ class _MainScreenState extends State<MainScreen> {
             setState(() {}); 
           }
         },
-        child: const Icon(Icons.add, color: Colors.black, size: 32),
+        child: const Icon(Icons.add, color: Color.fromARGB(255, 107, 96, 18), size: 32),
       ),
       
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

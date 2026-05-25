@@ -64,6 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '880790845788',
     projectId: 'golemons-ee306',
     storageBucket: 'golemons-ee306.firebasestorage.app',
+    iosClientId: '880790845788-a6p5ugsht8pkhub4uor8ghpahln9j700.apps.googleusercontent.com',
     iosBundleId: 'com.example.mobileApp',
   );
 
@@ -73,6 +74,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '880790845788',
     projectId: 'golemons-ee306',
     storageBucket: 'golemons-ee306.firebasestorage.app',
+    iosClientId: '880790845788-a6p5ugsht8pkhub4uor8ghpahln9j700.apps.googleusercontent.com',
     iosBundleId: 'com.example.mobileApp',
   );
 
@@ -85,4 +87,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'golemons-ee306.firebasestorage.app',
     measurementId: 'G-Z3H49S3PSQ',
   );
+
 }

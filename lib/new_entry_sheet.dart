@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt; 
-import 'package:audioplayers/audioplayers.dart'; // 🍋 NEW: Import the Audio Players package!
+import 'package:audioplayers/audioplayers.dart'; 
 import 'cloud_service.dart'; 
 
 class NewEntrySheet extends StatefulWidget {
@@ -29,10 +29,11 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   late Animation<double> _scaleAnimation;
   late Animation<double> _rotationAnimation;
 
-  // 🍋 NEW: Audio Engine Controller
+  // Audio Engine Controller
   late AudioPlayer _audioPlayer;
 
-  List<Map<String, String>> _moods = [
+  // 🍋 APALING REDESIGN: Uniform, singular emoji maps
+  final List<Map<String, String>> _moods = [
     {'label': 'Happy', 'emoji': '😊'},
     {'label': 'Neutral', 'emoji': '😐'},
     {'label': 'Sad', 'emoji': '😢'},
@@ -46,10 +47,8 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
     _speech = stt.SpeechToText(); 
     _initSpeech(); 
 
-    // 🍋 Initialize the Audio Player
     _audioPlayer = AudioPlayer();
 
-    // Initialize the success orchestration timeline controller
     _successController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -71,16 +70,15 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   @override
   void dispose() {
     _successController.dispose();
-    _audioPlayer.dispose(); // 🍋 NEW: Clean up the audio hardware when sheet closes
+    _audioPlayer.dispose(); 
     _noteController.dispose();
     _tagController.dispose();
     super.dispose();
   }
 
-  // 🍋 NEW: Play the success sound tracking from local assets pool
   void _playSuccessSound() async {
     try {
-      await _audioPlayer.play(AssetSource('success.mp3'));
+      await _audioPlayer.play(AssetSource('audios/success.mp3'));
     } catch (e) {
       print("Audio Playback Error: $e");
     }
@@ -155,26 +153,29 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Add Custom Mood'), 
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: customEmojiController, 
-                decoration: const InputDecoration(
-                  labelText: 'Emoji (e.g., 🍕)', 
-                  hintText: 'Enter an emoji',
+          backgroundColor: Colors.white,
+          title: const Text('Add Custom Mood', style: TextStyle(fontWeight: FontWeight.bold)), 
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: customEmojiController, 
+                  decoration: const InputDecoration(
+                    labelText: 'Emoji (e.g., 🍕)', 
+                    hintText: 'Enter an emoji',
+                  ),
+                  maxLength: 1, 
                 ),
-                maxLength: 2, 
-              ),
-              TextField(
-                controller: customLabelController, 
-                decoration: const InputDecoration(
-                  labelText: 'Label (e.g., Hungry)', 
-                  hintText: 'Enter a feeling', 
+                TextField(
+                  controller: customLabelController, 
+                  decoration: const InputDecoration(
+                    labelText: 'Label (e.g., Hungry)', 
+                    hintText: 'Enter a feeling', 
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -194,8 +195,12 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                   Navigator.pop(context); 
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[600]), 
-              child: const Text('Add', style: TextStyle(color: Colors.black)), 
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.yellow[600],
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ), 
+              child: const Text('Add', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), 
             ),
           ],
         );
@@ -207,7 +212,6 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white, 
-      
       body: Stack(
         children: [
           SafeArea(
@@ -216,15 +220,18 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, 
                 children: [
-                  const SizedBox(height: 35), 
+                  const SizedBox(height: 24), 
 
                   // --- Header inside the safe area ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween, 
                     children: [
-                      const Text('New Entry', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black)), 
+                      const Text(
+                        'New Entry', 
+                        style: TextStyle(fontSize: 26,  color: Colors.black, letterSpacing: -0.5),
+                      ), 
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.black, size: 28), 
+                        icon: const Icon(Icons.close, color: Colors.black, size: 26), 
                         onPressed: () {
                           if (_isListening) _speech.stop(); 
                           Navigator.pop(context); 
@@ -232,75 +239,104 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24), 
+                  const SizedBox(height: 20), 
 
-                  // --- Mood Selector ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                    children: [
-                      ..._moods.map((mood) {
-                        final isSelected = _selectedMood == mood['label']; 
-                        
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 6.0), 
+                  // --- Redesigned Premium Mood Selector Area ---
+                  const Text(
+                    "Select Mood",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  SizedBox(
+                    height: 86,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _moods.length + 1, // Add 1 for the "Custom" creation slot
+                      itemBuilder: (context, index) {
+                        // Custom Action card rendering setup
+                        if (index == _moods.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0, top: 4, bottom: 4),
                             child: GestureDetector(
-                              onTap: () => setState(() => _selectedMood = mood['label']), 
+                              onTap: _showAddCustomMoodDialog,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10), 
+                                width: 68,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? Colors.yellow[100] : Colors.grey[50], 
-                                  border: Border.all(
-                                    color: isSelected ? Colors.yellow[700]! : Colors.grey[200]!, 
-                                    width: 2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12), 
+                                  color: Colors.white,
+                                  border: Border.all(color: Colors.grey[200]!, width: 1.5),
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(mood['emoji']!, style: const TextStyle(fontSize: 26)), 
-                                    const SizedBox(height: 2), 
-                                    Text(
-                                      mood['label']!, 
-                                      style: TextStyle(
-                                        fontSize: 10, 
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal 
-                                      ),
-                                      overflow: TextOverflow.ellipsis, 
+                                    Icon(Icons.add, size: 24, color: Colors.grey[400]),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Custom',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
+                          );
+                        }
+
+                        // Regular Single Mood Capsule rendering logic
+                        final mood = _moods[index];
+                        final isSelected = _selectedMood == mood['label'];
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 10.0, top: 4, bottom: 4),
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedMood = mood['label']),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOutCubic,
+                              width: 68,
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.yellow[50] : Colors.grey[50],
+                                border: Border.all(
+                                  color: isSelected ? Colors.yellow[600]! : Colors.transparent,
+                                  width: 2,
+                                ),
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: isSelected ? [
+                                  BoxShadow(
+                                    color: Colors.yellow[600]!.withOpacity(0.15),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 3),
+                                  )
+                                ] : [],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AnimatedScale(
+                                    scale: isSelected ? 1.15 : 1.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Text(mood['emoji']!, style: const TextStyle(fontSize: 26)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    mood['label']!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: isSelected ? FontWeight.w800 : Kish().weightMapping,
+                                      color: isSelected ? Colors.yellow[900] : Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         );
-                      }), 
-
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _showAddCustomMoodDialog, 
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10), 
-                            decoration: BoxDecoration(
-                              color: Colors.white, 
-                              border: Border.all(color: Colors.grey[300]!, width: 2), 
-                              borderRadius: BorderRadius.circular(12), 
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(Icons.add, size: 30, color: Colors.grey[400]), 
-                                const SizedBox(height: 2), 
-                                const Text(
-                                  'Custom', 
-                                  style: TextStyle(fontSize: 10, color: Colors.grey), 
-                                  overflow: TextOverflow.ellipsis, 
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                      },
+                    ),
                   ),
                   const SizedBox(height: 24), 
 
@@ -310,7 +346,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                     children: [
                       const Text(
                         "What's on your mind? (optional)", 
-                        style: TextStyle(fontWeight: FontWeight.bold) 
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.black87) 
                       ),
                       Container(
                         decoration: BoxDecoration(
@@ -321,12 +357,12 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                           icon: Icon(
                             _isListening ? Icons.stop : Icons.mic, 
                             color: _isListening ? Colors.red : Colors.yellow[800], 
-                            size: 20, 
+                            size: 18, 
                           ),
                           onPressed: _isSaving ? null : _toggleListening, 
                           tooltip: _isListening ? 'Stop listening' : 'Record voice note', 
                           constraints: const BoxConstraints(), 
-                          padding: const EdgeInsets.all(8), 
+                          padding: const EdgeInsets.all(6), 
                         ),
                       ),
                     ],
@@ -343,14 +379,14 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                         hintText: 'Write a note...', 
                         filled: true, 
                         fillColor: Colors.grey[50], 
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), 
                       ),
                     ),
                   ),
                   const SizedBox(height: 20), 
 
                   // --- Tags Field ---
-                  const Text("Add tags (optional)", style: TextStyle(fontWeight: FontWeight.bold)), 
+                  const Text("Add tags (optional)", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.black87)), 
                   const SizedBox(height: 8), 
                   TextField(
                     controller: _tagController, 
@@ -358,19 +394,20 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                       hintText: 'Type a tag and press enter', 
                       filled: true, 
                       fillColor: Colors.grey[50], 
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), 
                     ),
                     onSubmitted: _addTag, 
                   ),
-                  const SizedBox(height: 12), 
+                  const SizedBox(height: 10), 
                   
                   Wrap(
                     spacing: 8, 
                     children: _tags.map((tag) => Chip(
-                      label: Text(tag), 
+                      label: Text(tag, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)), 
                       onDeleted: () => setState(() => _tags.remove(tag)), 
                       backgroundColor: Colors.white, 
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), 
+                      side: BorderSide(color: Colors.grey[200]!),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), 
                     )).toList(),
                   ),
                   const SizedBox(height: 16), 
@@ -437,7 +474,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
       // --- Action Buttons docked at the bottom ---
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24), 
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 16), 
           child: Row(
             children: [
               Expanded(
@@ -446,7 +483,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                     if (_isListening) _speech.stop(); 
                     Navigator.pop(context); 
                   },
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 16)), 
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)), 
                 ),
               ),
               const SizedBox(width: 16), 
@@ -482,7 +519,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                         _showSuccessAnimation = true;
                       });
                       _successController.forward();
-                      _playSuccessSound(); // 🍋 NEW: Fire the audio playback engine synchronously!
+                      _playSuccessSound(); 
                     }
 
                     await Future.delayed(const Duration(milliseconds: 1400));
@@ -493,8 +530,9 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.yellow[600], 
-                    padding: const EdgeInsets.symmetric(vertical: 16), 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14), 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), 
                   ),
                   child: Text(
                     _isSaving ? 'Saving...' : 'Save', 
@@ -508,4 +546,9 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
       ),
     );
   }
+}
+
+// Custom safety weights class extension
+class Kish {
+  FontWeight get weightMapping => FontWeight.w500;
 }
