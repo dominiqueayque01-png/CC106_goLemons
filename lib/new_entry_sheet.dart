@@ -12,6 +12,7 @@ class NewEntrySheet extends StatefulWidget {
 
 class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateMixin {
   String? _selectedMood; 
+  final TextEditingController _titleController = TextEditingController(); 
   final TextEditingController _noteController = TextEditingController(); 
   final TextEditingController _tagController = TextEditingController(); 
   final List<String> _tags = []; 
@@ -32,7 +33,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   // Audio Engine Controller
   late AudioPlayer _audioPlayer;
 
-  // 🍋 APALING REDESIGN: Uniform, singular emoji maps
+  // 🍋 Uniform, singular emoji maps
   final List<Map<String, String>> _moods = [
     {'label': 'Happy', 'emoji': '😊'},
     {'label': 'Neutral', 'emoji': '😐'},
@@ -71,6 +72,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   void dispose() {
     _successController.dispose();
     _audioPlayer.dispose(); 
+    _titleController.dispose(); 
     _noteController.dispose();
     _tagController.dispose();
     super.dispose();
@@ -162,7 +164,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                 TextField(
                   controller: customEmojiController, 
                   decoration: const InputDecoration(
-                    labelText: 'Emoji (e.g., 🍕)', 
+                    labelText: 'Emoji (e.g., 🍕)',
                     hintText: 'Enter an emoji',
                   ),
                   maxLength: 1, 
@@ -215,20 +217,22 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
       body: Stack(
         children: [
           SafeArea(
-            child: Padding(
+            // 🍋 FIX: Added SingleChildScrollView to make the page scrollable when the keyboard is open
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24.0), 
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, 
                 children: [
                   const SizedBox(height: 24), 
 
-                  // --- Header inside the safe area ---
+                  // --- Header ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween, 
                     children: [
                       const Text(
                         'New Entry', 
-                        style: TextStyle(fontSize: 26,  color: Colors.black, letterSpacing: -0.5),
+                        style: TextStyle(fontSize: 26, color: Colors.black, letterSpacing: -0.5, fontWeight: FontWeight.bold),
                       ), 
                       IconButton(
                         icon: const Icon(Icons.close, color: Colors.black, size: 26), 
@@ -241,7 +245,26 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                   ),
                   const SizedBox(height: 20), 
 
-                  // --- Redesigned Premium Mood Selector Area ---
+                  // --- Title Input Field ---
+                  const Text(
+                    "Title",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _titleController,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      hintText: 'Give your entry a title...', 
+                      filled: true, 
+                      fillColor: Colors.grey[50], 
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- Mood Selector Area ---
                   const Text(
                     "Select Mood",
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.black87),
@@ -253,9 +276,8 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
-                      itemCount: _moods.length + 1, // Add 1 for the "Custom" creation slot
+                      itemCount: _moods.length + 1, 
                       itemBuilder: (context, index) {
-                        // Custom Action card rendering setup
                         if (index == _moods.length) {
                           return Padding(
                             padding: const EdgeInsets.only(right: 8.0, top: 4, bottom: 4),
@@ -284,14 +306,13 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                           );
                         }
 
-                        // Regular Single Mood Capsule rendering logic
-                        final mood = _moods[index];
-                        final isSelected = _selectedMood == mood['label'];
+                        final _mood = _moods[index];
+                        final isSelected = _selectedMood == _mood['label'];
 
                         return Padding(
                           padding: const EdgeInsets.only(right: 10.0, top: 4, bottom: 4),
                           child: GestureDetector(
-                            onTap: () => setState(() => _selectedMood = mood['label']),
+                            onTap: () => setState(() => _selectedMood = _mood['label']),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOutCubic,
@@ -317,11 +338,11 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                                   AnimatedScale(
                                     scale: isSelected ? 1.15 : 1.0,
                                     duration: const Duration(milliseconds: 200),
-                                    child: Text(mood['emoji']!, style: const TextStyle(fontSize: 26)),
+                                    child: Text(_mood['emoji']!, style: const TextStyle(fontSize: 26)),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    mood['label']!,
+                                    _mood['label']!,
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: isSelected ? FontWeight.w800 : Kish().weightMapping,
@@ -369,7 +390,9 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                   ),
                   const SizedBox(height: 8), 
                   
-                  Expanded(
+                  // 🍋 FIX: Swapped Expanded to a fixed height Container so it plays nice inside the ScrollView
+                  Container(
+                    height: 160,
                     child: TextField(
                       controller: _noteController, 
                       maxLines: null, 
@@ -379,7 +402,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                         hintText: 'Write a note...', 
                         filled: true, 
                         fillColor: Colors.grey[50], 
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), 
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
                       ),
                     ),
                   ),
@@ -394,7 +417,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                       hintText: 'Type a tag and press enter', 
                       filled: true, 
                       fillColor: Colors.grey[50], 
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none), 
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
                     ),
                     onSubmitted: _addTag, 
                   ),
@@ -410,7 +433,7 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), 
                     )).toList(),
                   ),
-                  const SizedBox(height: 16), 
+                  const SizedBox(height: 24), 
                 ],
               ),
             ),
@@ -490,6 +513,13 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
               Expanded(
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : () async { 
+                    if (_titleController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please give your entry a title first!')), 
+                      );
+                      return;
+                    }
+
                     if (_selectedMood == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Please select a mood first!')), 
@@ -507,11 +537,13 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
                     });
 
                     final emoji = _moods.firstWhere((m) => m['label'] == _selectedMood)['emoji']!; 
+                    
                     await CloudService.saveMoodEntry(
+                      _titleController.text.trim(),
                       _selectedMood!, 
                       emoji, 
                       _noteController.text.trim(), 
-                      List.from(_tags), 
+                      List<String>.from(_tags), 
                     );
 
                     if (mounted) {
@@ -548,7 +580,6 @@ class _NewEntrySheetState extends State<NewEntrySheet> with TickerProviderStateM
   }
 }
 
-// Custom safety weights class extension
 class Kish {
   FontWeight get weightMapping => FontWeight.w500;
 }

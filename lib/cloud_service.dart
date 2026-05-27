@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CloudService {
-  // 🍋 A helper function to save a new squeeze to the cloud
-  static Future<void> saveMoodEntry(String mood, String emoji, String note, List<String> tags) async {
+  // 🍋 A helper function to save a new squeeze to the cloud (Now with Title!)
+  static Future<void> saveMoodEntry(String title, String mood, String emoji, String note, List<String> tags) async {
     // 1. Find out who is currently using the app
     final user = FirebaseAuth.instance.currentUser;
     
@@ -17,11 +17,12 @@ class CloudService {
         .doc(user.uid)
         .collection('entries')
         .add({
+      'title': title, // 🍋 Now correctly resolves to the method parameter!
       'mood': mood,
       'emoji': emoji,
       'note': note,
       'tags': tags,
-      'date': DateTime.now(), // Saves the exact millisecond they pressed save
+      'date': Timestamp.now(), // 🍋 Upgraded to Timestamp for cleaner TableCalendar compatibility
     });
   }
 

@@ -42,43 +42,46 @@ class _HomeViewState extends State<HomeView>
   }
 
   int _calculateStreak(List<DateTime> allDates) {
-    if (allDates.isEmpty) return 0;
+  if (allDates.isEmpty) return 0;
 
-    List<DateTime> uniqueDates = [];
-    for (var date in allDates) {
-      DateTime justDate = DateTime(date.year, date.month, date.day);
-      if (!uniqueDates.contains(justDate)) {
-        uniqueDates.add(justDate);
-      }
-    }
+  // Get unique days, sorted newest first
+  final uniqueDays = allDates
+      .map((d) => DateTime(d.year, d.month, d.day))
+      .toSet()
+      .toList()
+    ..sort((a, b) => b.compareTo(a));
 
-    if (uniqueDates.isEmpty) return 0;
+  final today = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  final yesterday = today.subtract(const Duration(days: 1));
 
-    DateTime today = DateTime.now();
-    DateTime justToday = DateTime(today.year, today.month, today.day);
-
-    int streak = 0;
-    DateTime currentDateToCheck = justToday;
-
-    if (uniqueDates.first != justToday &&
-        uniqueDates.first != justToday.subtract(const Duration(days: 1))) {
-      return 0;
-    }
-
-    for (int i = 0; i < uniqueDates.length; i++) {
-      if (uniqueDates[i] == currentDateToCheck) {
-        streak++;
-        currentDateToCheck = currentDateToCheck.subtract(
-          const Duration(days: 1),
-        );
-      } else if (i == 0 &&
-          uniqueDates[i] ==
-              currentDateToCheck.subtract(const Duration(days: 1))) {
-        break;
-      }
-    }
-    return streak;
+  // 🍋 THE FIX: Start from today if logged today, yesterday if not.
+  // If most recent entry is older than yesterday, streak is already broken.
+  DateTime dateToCheck;
+  if (uniqueDays.first == today) {
+    dateToCheck = today;
+  } else if (uniqueDays.first == yesterday) {
+    dateToCheck = yesterday;
+  } else {
+    return 0; // Streak is broken — last entry was 2+ days ago
   }
+
+  // Count backwards until the chain breaks
+  int streak = 0;
+  for (DateTime day in uniqueDays) {
+    if (day == dateToCheck) {
+      streak++;
+      dateToCheck = dateToCheck.subtract(const Duration(days: 1));
+    } else if (day.isBefore(dateToCheck)) {
+      break; // Gap found — streak ends here
+    }
+  }
+
+  return streak;
+}
 
   @override
   bool get wantKeepAlive => true;
@@ -392,6 +395,7 @@ class _HomeViewState extends State<HomeView>
                               String mood = data['mood'] ?? '';
                               String emoji = data['emoji'] ?? '🍋';
                               String note = data['note'] ?? '';
+                              String title = data['title'] ?? '';
 
                               return FadeInSlideListItem(
                                 index: index,
@@ -453,27 +457,40 @@ class _HomeViewState extends State<HomeView>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                mood,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                              if (note.isNotEmpty) ...[
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  note,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                    height: 1.25,
-                                                    fontSize: 13,
-                                                  ),
-                                                ),
-                                              ],
+                                              // 🍋 Title as the main headline
+if (title.isNotEmpty)
+  Text(
+    title,
+    style: const TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 15,
+    ),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+  ),
+// Mood as a smaller label underneath
+Text(
+  mood,
+  style: TextStyle(
+    fontWeight: FontWeight.w500,
+    fontSize: 13,
+    color: Colors.grey[500],
+  ),
+),
+if (note.isNotEmpty) ...[
+  const SizedBox(height: 2),
+  Text(
+    note,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(
+      color: Colors.grey[400],
+      height: 1.25,
+      fontSize: 12,
+    ),
+  ),
+],
+
                                             ],
                                           ),
                                         ),
