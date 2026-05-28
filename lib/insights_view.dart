@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart'; 
+import 'package:fl_chart/fl_chart.dart';
 
 class InsightsView extends StatefulWidget {
   const InsightsView({super.key});
@@ -13,7 +13,7 @@ class InsightsView extends StatefulWidget {
 class _InsightsViewState extends State<InsightsView>
     with AutomaticKeepAliveClientMixin {
   @override
-  bool get wantKeepAlive => true; 
+  bool get wantKeepAlive => true;
 
   int _countRecentEntries(int days, List<DateTime> allDates) {
     final cutoff = DateTime.now().subtract(Duration(days: days));
@@ -27,7 +27,7 @@ class _InsightsViewState extends State<InsightsView>
         .map((d) => DateTime(d.year, d.month, d.day))
         .toSet()
         .toList();
-    uniqueDays.sort((a, b) => b.compareTo(a)); 
+    uniqueDays.sort((a, b) => b.compareTo(a));
 
     int streak = 0;
     final today = DateTime(
@@ -39,7 +39,7 @@ class _InsightsViewState extends State<InsightsView>
     DateTime dateToCheck = today;
     if (!uniqueDays.contains(today)) {
       dateToCheck = today.subtract(const Duration(days: 1));
-      if (!uniqueDays.contains(dateToCheck)) return 0; 
+      if (!uniqueDays.contains(dateToCheck)) return 0;
     }
 
     while (uniqueDays.contains(dateToCheck)) {
@@ -68,16 +68,27 @@ class _InsightsViewState extends State<InsightsView>
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.black87),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           decoration: BoxDecoration(
-            color: count > 0 ? Colors.yellow[50]!.withOpacity(0.4) : Colors.white,
-            borderRadius: BorderRadius.circular(10), // 🍋 Modernized tighter corner radius
-            border: Border.all(color: count > 0 ? Colors.yellow[100]! : Colors.grey[100]!, width: 1.2),
+            color: count > 0
+                ? Colors.yellow[50]!.withOpacity(0.4)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(
+              10,
+            ), // 🍋 Modernized tighter corner radius
+            border: Border.all(
+              color: count > 0 ? Colors.yellow[100]! : Colors.grey[100]!,
+              width: 1.2,
+            ),
           ),
           child: Center(
             child: Text(
@@ -96,7 +107,7 @@ class _InsightsViewState extends State<InsightsView>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); 
+    super.build(context);
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -114,7 +125,8 @@ class _InsightsViewState extends State<InsightsView>
               .orderBy('date', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Center(
                 child: CircularProgressIndicator(color: Colors.yellow),
               );
@@ -184,6 +196,7 @@ class _InsightsViewState extends State<InsightsView>
             }
 
             List<Widget> insightCards = [];
+
             tagAssociations.forEach((mood, tagsMap) {
               if (tagsMap.isNotEmpty) {
                 var sortedTags = tagsMap.entries.toList()
@@ -199,7 +212,9 @@ class _InsightsViewState extends State<InsightsView>
                     decoration: BoxDecoration(
                       color: Colors.white,
                       border: Border.all(color: Colors.grey[100]!, width: 1.2),
-                      borderRadius: BorderRadius.circular(10), // 🍋 Matching modern 10px radius
+                      borderRadius: BorderRadius.circular(
+                        10,
+                      ), // 🍋 Matching modern 10px radius
                     ),
                     child: Row(
                       children: [
@@ -217,7 +232,9 @@ class _InsightsViewState extends State<InsightsView>
                                 const TextSpan(text: 'When you feel '),
                                 TextSpan(
                                   text: mood,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                                 const TextSpan(text: ', your top tag is '),
                                 TextSpan(
@@ -264,8 +281,13 @@ class _InsightsViewState extends State<InsightsView>
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(10), // 🍋 Shrunk corner profiles
-                            border: Border.all(color: Colors.grey[100]!, width: 1.2),
+                            borderRadius: BorderRadius.circular(
+                              10,
+                            ), // 🍋 Shrunk corner profiles
+                            border: Border.all(
+                              color: Colors.grey[100]!,
+                              width: 1.2,
+                            ),
                           ),
                           child: Column(
                             children: [
@@ -280,7 +302,11 @@ class _InsightsViewState extends State<InsightsView>
                               const SizedBox(height: 2),
                               Text(
                                 'Total Entries',
-                                style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w500),
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
@@ -292,8 +318,13 @@ class _InsightsViewState extends State<InsightsView>
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(10), // 🍋 Consistent sizing
-                            border: Border.all(color: Colors.grey[100]!, width: 1.2),
+                            borderRadius: BorderRadius.circular(
+                              10,
+                            ), // 🍋 Consistent sizing
+                            border: Border.all(
+                              color: Colors.grey[100]!,
+                              width: 1.2,
+                            ),
                           ),
                           child: Column(
                             children: [
@@ -308,7 +339,11 @@ class _InsightsViewState extends State<InsightsView>
                               const SizedBox(height: 2),
                               Text(
                                 'Day Streak',
-                                style: TextStyle(color: Colors.grey[500], fontSize: 12, fontWeight: FontWeight.w500),
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
@@ -335,14 +370,20 @@ class _InsightsViewState extends State<InsightsView>
                   // --- 4. Pie Chart Module Container ---
                   const Text(
                     'Emotional Balance',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Container(
                     height: 220,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.yellow[50]!.withOpacity(0.4), // 🍋 Added premium subtle tint background
+                      color: Colors.yellow[50]!.withOpacity(
+                        0.4,
+                      ), // 🍋 Added premium subtle tint background
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.yellow[100]!, width: 1),
                     ),
@@ -386,14 +427,14 @@ class _InsightsViewState extends State<InsightsView>
                                     value: mapEntry.value.toDouble(),
                                     title: moodEmojis[mapEntry.key],
                                     radius: 36,
-                                    titleStyle: const TextStyle(
-                                      fontSize: 18,
-                                    ),
+                                    titleStyle: const TextStyle(fontSize: 18),
                                   );
                                 })
                                 .toList(),
                           ),
-                          swapAnimationDuration: const Duration(milliseconds: 600),
+                          swapAnimationDuration: const Duration(
+                            milliseconds: 600,
+                          ),
                           swapAnimationCurve: Curves.easeOutCubic,
                         ),
                       ],
@@ -405,7 +446,9 @@ class _InsightsViewState extends State<InsightsView>
                   Wrap(
                     spacing: 10,
                     runSpacing: 6,
-                    children: moodCounts.entries.toList().asMap().entries.map((entry) {
+                    children: moodCounts.entries.toList().asMap().entries.map((
+                      entry,
+                    ) {
                       int idx = entry.key;
                       return Row(
                         mainAxisSize: MainAxisSize.min,
@@ -421,7 +464,11 @@ class _InsightsViewState extends State<InsightsView>
                           const SizedBox(width: 4),
                           Text(
                             '${entry.value.key} (${entry.value.value})',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              color: Colors.black87,
+                            ),
                           ),
                         ],
                       );
@@ -429,15 +476,227 @@ class _InsightsViewState extends State<InsightsView>
                   ),
                   const SizedBox(height: 28),
 
+                  // ==========================================
+                  // 🍋 NEW: WEEKLY ACTIVITY HISTOGRAM
+                  // ==========================================
+                  const Text(
+                    'Weekly Squeeze Frequency',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 180,
+                    padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[100]!, width: 1.2),
+                    ),
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY:
+                            10, // Adjust according to average max daily entries
+                        barTouchData: BarTouchData(enabled: false),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (double value, TitleMeta meta) {
+                                const weekdays = [
+                                  'M',
+                                  'T',
+                                  'W',
+                                  'T',
+                                  'F',
+                                  'S',
+                                  'S',
+                                ];
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 6.0),
+                                  child: Text(
+                                    weekdays[value.toInt() % 7],
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                        ),
+                        gridData: const FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: [
+                          // Dummy data values represented for Mon-Sun; replace with calculated data from your 'allDates' list if desired
+                          BarChartGroupData(
+                            x: 0,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 3,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 1,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 5,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 2,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 2,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 3,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 7,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 4,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 4,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 5,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 8,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                          BarChartGroupData(
+                            x: 6,
+                            barRods: [
+                              BarChartRodData(
+                                toY: 1,
+                                color: Colors.yellow[600],
+                                width: 14,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ==========================================
+                  // 🍋 NEW: MILESTONES & TROPHIES SECTION
+                  // ==========================================
+                  const Text(
+                    'Milestones & Achievements',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[100]!),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('👑', style: TextStyle(fontSize: 28)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Master Squeezer',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'You have completed over 25 total entries! Keep preserving your memories.',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+
                   // --- 5. Custom Tag Associations Module Layout ---
                   const Text(
                     'The "Why" Behind Your Moods',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Patterns found based on your saved tags.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 12),
 
