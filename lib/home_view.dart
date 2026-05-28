@@ -42,46 +42,44 @@ class _HomeViewState extends State<HomeView>
   }
 
   int _calculateStreak(List<DateTime> allDates) {
-  if (allDates.isEmpty) return 0;
+    if (allDates.isEmpty) return 0;
 
-  // Get unique days, sorted newest first
-  final uniqueDays = allDates
-      .map((d) => DateTime(d.year, d.month, d.day))
-      .toSet()
-      .toList()
-    ..sort((a, b) => b.compareTo(a));
+    // Get unique days, sorted newest first
+    final uniqueDays =
+        allDates.map((d) => DateTime(d.year, d.month, d.day)).toSet().toList()
+          ..sort((a, b) => b.compareTo(a));
 
-  final today = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-    DateTime.now().day,
-  );
-  final yesterday = today.subtract(const Duration(days: 1));
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final yesterday = today.subtract(const Duration(days: 1));
 
-  // 🍋 THE FIX: Start from today if logged today, yesterday if not.
-  // If most recent entry is older than yesterday, streak is already broken.
-  DateTime dateToCheck;
-  if (uniqueDays.first == today) {
-    dateToCheck = today;
-  } else if (uniqueDays.first == yesterday) {
-    dateToCheck = yesterday;
-  } else {
-    return 0; // Streak is broken — last entry was 2+ days ago
-  }
-
-  // Count backwards until the chain breaks
-  int streak = 0;
-  for (DateTime day in uniqueDays) {
-    if (day == dateToCheck) {
-      streak++;
-      dateToCheck = dateToCheck.subtract(const Duration(days: 1));
-    } else if (day.isBefore(dateToCheck)) {
-      break; // Gap found — streak ends here
+    // 🍋 THE FIX: Start from today if logged today, yesterday if not.
+    // If most recent entry is older than yesterday, streak is already broken.
+    DateTime dateToCheck;
+    if (uniqueDays.first == today) {
+      dateToCheck = today;
+    } else if (uniqueDays.first == yesterday) {
+      dateToCheck = yesterday;
+    } else {
+      return 0; // Streak is broken — last entry was 2+ days ago
     }
-  }
 
-  return streak;
-}
+    // Count backwards until the chain breaks
+    int streak = 0;
+    for (DateTime day in uniqueDays) {
+      if (day == dateToCheck) {
+        streak++;
+        dateToCheck = dateToCheck.subtract(const Duration(days: 1));
+      } else if (day.isBefore(dateToCheck)) {
+        break; // Gap found — streak ends here
+      }
+    }
+
+    return streak;
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -135,11 +133,13 @@ class _HomeViewState extends State<HomeView>
                   d.day == today.day;
             }).toList();
 
+            final bool loggedToday = todaysDocs.isNotEmpty;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),
-                
+
                 // --- 1. The Branded App Top Bar ---
                 AnimatedOpacity(
                   opacity: _headerAnimated ? 1.0 : 0.0,
@@ -163,10 +163,7 @@ class _HomeViewState extends State<HomeView>
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: const [
-                                  Text(
-                                    '🍋',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
+                                  Text('🍋', style: TextStyle(fontSize: 18)),
                                   SizedBox(width: 6),
                                   Text(
                                     'goLemons',
@@ -219,18 +216,26 @@ class _HomeViewState extends State<HomeView>
                                   .snapshots(),
                               builder: (context, userSnapshot) {
                                 String? profileImageUrl;
-                                if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                                  final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                                  profileImageUrl = userData['profileImageUrl'] as String?;
+                                if (userSnapshot.hasData &&
+                                    userSnapshot.data!.exists) {
+                                  final userData =
+                                      userSnapshot.data!.data()
+                                          as Map<String, dynamic>;
+                                  profileImageUrl =
+                                      userData['profileImageUrl'] as String?;
                                 }
 
                                 return CircleAvatar(
                                   radius: 16,
                                   backgroundColor: Colors.yellow[100],
-                                  backgroundImage: profileImageUrl != null && profileImageUrl.isNotEmpty
+                                  backgroundImage:
+                                      profileImageUrl != null &&
+                                          profileImageUrl.isNotEmpty
                                       ? NetworkImage(profileImageUrl)
                                       : null,
-                                  child: (profileImageUrl == null || profileImageUrl.isEmpty)
+                                  child:
+                                      (profileImageUrl == null ||
+                                          profileImageUrl.isEmpty)
                                       ? const Text(
                                           '🍋',
                                           style: TextStyle(fontSize: 14),
@@ -289,13 +294,17 @@ class _HomeViewState extends State<HomeView>
                                   letterSpacing: 0.1,
                                 ),
                               ),
-                              Container(
+                              // ✅ After
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 400),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: loggedToday
+                                      ? Colors.white.withOpacity(0.9)
+                                      : Colors.white.withOpacity(0.4),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
@@ -307,16 +316,51 @@ class _HomeViewState extends State<HomeView>
                                 ),
                                 child: Row(
                                   children: [
-                                    const Text(
-                                      '🔥 ',
-                                      style: TextStyle(fontSize: 13),
+                                    // 🍋 Greyscale fire when not logged today, color when logged
+                                    ColorFiltered(
+                                      colorFilter: loggedToday
+                                          ? const ColorFilter.mode(
+                                              Colors.transparent,
+                                              BlendMode.saturation,
+                                            )
+                                          : const ColorFilter.matrix(<double>[
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0.2126,
+                                              0.7152,
+                                              0.0722,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              0,
+                                              1,
+                                              0,
+                                            ]),
+                                      child: const Text(
+                                        '🔥',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
                                     ),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      '$currentStreak Days',
-                                      style: const TextStyle(
+                                      loggedToday
+                                          ? '$currentStreak Days'
+                                          : '$currentStreak Days ·  Log to keep it!',
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w800,
-                                        color: Colors.black87,
-                                        fontSize: 13,
+                                        color: loggedToday
+                                            ? Colors.black87
+                                            : Colors.black45,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ],
@@ -396,6 +440,11 @@ class _HomeViewState extends State<HomeView>
                               String emoji = data['emoji'] ?? '🍋';
                               String note = data['note'] ?? '';
                               String title = data['title'] ?? '';
+                              List<String> tags = List<String>.from(
+                                data['tags'] ?? [],
+                              );
+                              DateTime entryDate =
+                                  (document['date'] as Timestamp).toDate();
 
                               return FadeInSlideListItem(
                                 index: index,
@@ -410,6 +459,9 @@ class _HomeViewState extends State<HomeView>
                                           emoji: emoji,
                                           initialNote: note,
                                           dateString: "Today",
+                                          title: title,
+                                          tags: tags,
+                                          entryDate: entryDate, // 🍋 NEW
                                         ),
                                       ),
                                     );
@@ -458,39 +510,40 @@ class _HomeViewState extends State<HomeView>
                                                 CrossAxisAlignment.start,
                                             children: [
                                               // 🍋 Title as the main headline
-if (title.isNotEmpty)
-  Text(
-    title,
-    style: const TextStyle(
-      fontWeight: FontWeight.w700,
-      fontSize: 15,
-    ),
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-  ),
-// Mood as a smaller label underneath
-Text(
-  mood,
-  style: TextStyle(
-    fontWeight: FontWeight.w500,
-    fontSize: 13,
-    color: Colors.grey[500],
-  ),
-),
-if (note.isNotEmpty) ...[
-  const SizedBox(height: 2),
-  Text(
-    note,
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    style: TextStyle(
-      color: Colors.grey[400],
-      height: 1.25,
-      fontSize: 12,
-    ),
-  ),
-],
-
+                                              if (title.isNotEmpty)
+                                                Text(
+                                                  title,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 15,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              // Mood as a smaller label underneath
+                                              Text(
+                                                mood,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 13,
+                                                  color: Colors.grey[500],
+                                                ),
+                                              ),
+                                              if (note.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  note,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: Colors.grey[400],
+                                                    height: 1.25,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),
