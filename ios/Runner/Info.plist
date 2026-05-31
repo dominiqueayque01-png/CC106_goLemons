@@ -71,5 +71,11 @@
 	<string>goLemons needs microphone access to translate your voice journals into text notes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>goLemons needs speech recognition access to transcribe your spoken notes.</string>
+
+	<key>UIBackgroundModes</key>
+<array>
+  <string>fetch</string>
+  <string>remote-notification</string>
+</array>
 </dict>
 </plist>

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login_view.dart';
+import 'notification_settings_sheet.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -353,6 +354,35 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+              // 🍋 ADD THIS — Daily Reminder
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: Colors.yellow[50], shape: BoxShape.circle),
+                  child: Icon(Icons.notifications_outlined,
+                      color: Colors.yellow[700]),
+                ),
+                title: const Text(
+                  'Daily Reminder',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                subtitle: const Text('Set your journaling reminder time'),
+                onTap: () {
+                  Navigator.pop(context); // close settings first
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const NotificationSettingsSheet(),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+                
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Container(
