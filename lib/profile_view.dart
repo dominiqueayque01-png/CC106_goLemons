@@ -38,6 +38,7 @@ class _ProfileViewState extends State<ProfileView> {
           setState(() => _isUploadingImage = false);
           return;
         }
+
         final storageRef = FirebaseStorage.instance
             .ref()
             .child('profile_pictures')
@@ -51,7 +52,13 @@ class _ProfileViewState extends State<ProfileView> {
             .doc(user.uid)
             .update({'profileImageUrl': downloadUrl});
 
+        // BUG FIX #2: Clear _selectedImage after upload so NetworkImage takes
+        // over with the freshly uploaded URL instead of keeping the stale local file.
         if (mounted) {
+          setState(() {
+            _selectedImage = null;
+            _isUploadingImage = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Profile picture saved! 🍋'),
@@ -61,7 +68,7 @@ class _ProfileViewState extends State<ProfileView> {
         }
       }
     } catch (e) {
-      print("Failed to pick or upload profile picture: $e");
+      debugPrint('Failed to pick or upload profile picture: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -72,21 +79,17 @@ class _ProfileViewState extends State<ProfileView> {
       }
     } finally {
       _isPickerActive = false;
-      if (mounted) {
-        setState(() {
-          _isUploadingImage = false;
-        });
+      if (mounted && _isUploadingImage) {
+        setState(() => _isUploadingImage = false);
       }
     }
   }
 
   void _showEditProfileSheet(String currentName, String currentUsername) {
-    final TextEditingController nameController = TextEditingController(
-      text: currentName,
-    );
-    final TextEditingController usernameController = TextEditingController(
-      text: currentUsername,
-    );
+    final TextEditingController nameController =
+        TextEditingController(text: currentName);
+    final TextEditingController usernameController =
+        TextEditingController(text: currentUsername);
     bool isSaving = false;
 
     showModalBottomSheet(
@@ -94,9 +97,7 @@ class _ProfileViewState extends State<ProfileView> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(12),
-        ), // 🍋 Tighter, matching aesthetic corners
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (context) {
         return StatefulBuilder(
@@ -133,9 +134,12 @@ class _ProfileViewState extends State<ProfileView> {
 
                   Center(
                     child: TextButton.icon(
+                      // BUG FIX #3: Use Future.microtask so the bottom sheet
+                      // fully closes before the image picker opens, preventing
+                      // a flicker or picker failure on some devices.
                       onPressed: () {
                         Navigator.pop(context);
-                        _pickProfilePicture();
+                        Future.microtask(() => _pickProfilePicture());
                       },
                       icon: const Icon(
                         Icons.camera_alt,
@@ -165,7 +169,7 @@ class _ProfileViewState extends State<ProfileView> {
                   const SizedBox(height: 20),
 
                   const Text(
-                    "Full Name",
+                    'Full Name',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
@@ -192,7 +196,7 @@ class _ProfileViewState extends State<ProfileView> {
                   const SizedBox(height: 16),
 
                   const Text(
-                    "Username",
+                    'Username',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
@@ -230,8 +234,8 @@ class _ProfileViewState extends State<ProfileView> {
                           ? null
                           : () async {
                               final newName = nameController.text.trim();
-                              final newUsername = usernameController.text
-                                  .trim();
+                              final newUsername =
+                                  usernameController.text.trim();
 
                               if (newName.isEmpty || newUsername.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -246,6 +250,38 @@ class _ProfileViewState extends State<ProfileView> {
 
                               final user = FirebaseAuth.instance.currentUser;
                               if (user != null) {
+                                // BUG FIX (username uniqueness): Check if the
+                                // new username is already taken by another user
+                                // before saving to Firestore.
+                                if (newUsername != currentUsername) {
+                                  final existing = await FirebaseFirestore
+                                      .instance
+                                      .collection('users')
+                                      .where(
+                                        'username',
+                                        isEqualTo: newUsername,
+                                      )
+                                      .get();
+
+                                  if (existing.docs.isNotEmpty &&
+                                      existing.docs.first.id != user.uid) {
+                                    setSheetState(() => isSaving = false);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Username already taken. Try another one!',
+                                          ),
+                                          backgroundColor: Colors.redAccent,
+                                        ),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                }
+
                                 await FirebaseFirestore.instance
                                     .collection('users')
                                     .doc(user.uid)
@@ -298,9 +334,7 @@ class _ProfileViewState extends State<ProfileView> {
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(12),
-        ), // 🍋 Sharp modern aesthetic
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (context) {
         return SafeArea(
@@ -319,7 +353,6 @@ class _ProfileViewState extends State<ProfileView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Container(
@@ -377,9 +410,7 @@ class _ProfileViewState extends State<ProfileView> {
             style: TextStyle(fontSize: 14),
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              10,
-            ), // 🍋 Consistent design system
+            borderRadius: BorderRadius.circular(10),
           ),
           actions: [
             TextButton(
@@ -418,9 +449,7 @@ class _ProfileViewState extends State<ProfileView> {
 
     if (shouldSignOut != true) return;
 
-    setState(() {
-      _isSigningOut = true;
-    });
+    setState(() => _isSigningOut = true);
 
     await Future.delayed(const Duration(milliseconds: 800));
     await FirebaseAuth.instance.signOut();
@@ -462,7 +491,7 @@ class _ProfileViewState extends State<ProfileView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // --- 1. Top Section Header (Less Size, Semi-Bold) ---
+                        // --- Header ---
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -470,9 +499,8 @@ class _ProfileViewState extends State<ProfileView> {
                             const Text(
                               'Profile',
                               style: TextStyle(
-                                fontSize: 22, // 🍋 Cohesive scale footprint
-                                fontWeight:
-                                    FontWeight.w600, // 🍋 Clean Semi-Bold
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
                                 color: Colors.black87,
                                 letterSpacing: -0.3,
                               ),
@@ -491,7 +519,7 @@ class _ProfileViewState extends State<ProfileView> {
                         ),
                         const SizedBox(height: 20),
 
-                        // --- 2. User Profile Card Module ---
+                        // --- Profile Card ---
                         if (currentUser != null)
                           StreamBuilder<DocumentSnapshot>(
                             stream: FirebaseFirestore.instance
@@ -516,13 +544,23 @@ class _ProfileViewState extends State<ProfileView> {
                                 );
                               }
 
-                              final userData =
-                                  snapshot.data!.data() as Map<String, dynamic>;
+                              final userData = snapshot.data!.data()
+                                  as Map<String, dynamic>;
                               final fullName =
                                   userData['fullName'] ?? 'No Name';
                               final username =
                                   userData['username'] ?? 'No Username';
-                              final email = userData['email'] ?? 'No Email';
+
+                              // BUG FIX #1: Fall back to FirebaseAuth email
+                              // when the Firestore 'email' field is missing or null.
+                              final email = (userData['email'] as String?)
+                                      ?.isNotEmpty ==
+                                      true
+                                  ? userData['email'] as String
+                                  : (currentUser.email?.isNotEmpty == true
+                                      ? currentUser.email!
+                                      : 'No Email');
+
                               final profileImageUrl =
                                   userData['profileImageUrl'] as String?;
 
@@ -531,9 +569,7 @@ class _ProfileViewState extends State<ProfileView> {
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(
-                                    10,
-                                  ), // 🍋 Standardized 10px borders
+                                  borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
                                     color: Colors.grey[100]!,
                                     width: 1.2,
@@ -547,17 +583,18 @@ class _ProfileViewState extends State<ProfileView> {
                                         CircleAvatar(
                                           radius: 40,
                                           backgroundColor: Colors.yellow[100],
-                                          backgroundImage:
-                                              _selectedImage != null
+                                          // BUG FIX #2 (avatar display): After upload
+                                          // _selectedImage is cleared to null, so the
+                                          // avatar correctly switches to the new NetworkImage.
+                                          backgroundImage: _selectedImage !=
+                                                  null
                                               ? FileImage(_selectedImage!)
                                               : (profileImageUrl != null
-                                                        ? NetworkImage(
-                                                            profileImageUrl,
-                                                          )
-                                                        : null)
-                                                    as ImageProvider?,
-                                          child:
-                                              (_selectedImage == null &&
+                                                  ? NetworkImage(
+                                                      profileImageUrl,
+                                                    )
+                                                  : null) as ImageProvider?,
+                                          child: (_selectedImage == null &&
                                                   profileImageUrl == null)
                                               ? const Text(
                                                   '🍋',
@@ -580,9 +617,9 @@ class _ProfileViewState extends State<ProfileView> {
                                                   width: 20,
                                                   child:
                                                       CircularProgressIndicator(
-                                                        color: Colors.yellow,
-                                                        strokeWidth: 2.5,
-                                                      ),
+                                                    color: Colors.yellow,
+                                                    strokeWidth: 2.5,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -645,7 +682,7 @@ class _ProfileViewState extends State<ProfileView> {
                           ),
                         const SizedBox(height: 24),
 
-                        // --- 3. Stats Section Module ---
+                        // --- Stats Section ---
                         const Text(
                           'Your Stats',
                           style: TextStyle(
@@ -675,12 +712,12 @@ class _ProfileViewState extends State<ProfileView> {
 
                               final docs = snapshot.hasData
                                   ? snapshot.data!.docs
-                                  : [];
+                                  : <QueryDocumentSnapshot>[];
                               final totalEntries = docs.length;
                               final daysLogged = docs
                                   .map((doc) {
-                                    final d = (doc['date'] as Timestamp)
-                                        .toDate();
+                                    final d =
+                                        (doc['date'] as Timestamp).toDate();
                                     return DateTime(d.year, d.month, d.day);
                                   })
                                   .toSet()
@@ -741,7 +778,7 @@ class _ProfileViewState extends State<ProfileView> {
                           ),
                         const SizedBox(height: 24),
 
-                        // --- 4. About Branded Section Module ---
+                        // --- About Section ---
                         const Text(
                           'About',
                           style: TextStyle(
