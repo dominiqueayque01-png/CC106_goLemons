@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
+import 'package:intl/intl.dart';
 import 'cloud_service.dart';
 
 class NewEntrySheet extends StatefulWidget {
@@ -17,24 +18,25 @@ class _NewEntrySheetState extends State<NewEntrySheet>
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _tagController = TextEditingController();
   final List<String> _tags = [];
+  final FocusNode _titleFocus = FocusNode();
+  final FocusNode _noteFocus = FocusNode();
 
   bool _isSaving = false;
 
-  // Speech to text variables
+  // Speech to text
   late stt.SpeechToText _speech;
   bool _isListening = false;
   bool _speechEnabled = false;
 
-  // Fluid Animation Utilities
+  // Success animation
   bool _showSuccessAnimation = false;
   late AnimationController _successController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _rotationAnimation;
 
-  // Audio Engine Controller
+  // Audio
   late AudioPlayer _audioPlayer;
 
-  // 🍋 Uniform, singular emoji maps
   final List<Map<String, String>> _moods = [
     {'label': 'Happy', 'emoji': '😊'},
     {'label': 'Neutral', 'emoji': '😐'},
@@ -48,19 +50,16 @@ class _NewEntrySheetState extends State<NewEntrySheet>
     super.initState();
     _speech = stt.SpeechToText();
     _initSpeech();
-
     _audioPlayer = AudioPlayer();
 
     _successController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-
     _scaleAnimation = CurvedAnimation(
       parent: _successController,
       curve: Curves.easeOutBack,
     );
-
     _rotationAnimation = Tween<double>(begin: -0.2, end: 0.0).animate(
       CurvedAnimation(parent: _successController, curve: Curves.elasticOut),
     );
@@ -73,6 +72,8 @@ class _NewEntrySheetState extends State<NewEntrySheet>
     _titleController.dispose();
     _noteController.dispose();
     _tagController.dispose();
+    _titleFocus.dispose();
+    _noteFocus.dispose();
     super.dispose();
   }
 
@@ -80,23 +81,81 @@ class _NewEntrySheetState extends State<NewEntrySheet>
     try {
       await _audioPlayer.play(AssetSource('audios/success.mp3'));
     } catch (e) {
-      print("Audio Playback Error: $e");
+      print("Audio error: $e");
     }
   }
 
   void _initSpeech() async {
     try {
       bool available = await _speech.initialize(
-        onError: (val) => print('Speech Init Error: $val'),
-        onStatus: (val) => print('Speech Init Status: $val'),
+        onError: (val) => print('Speech error: $val'),
       );
-      if (mounted) {
-        setState(() {
-          _speechEnabled = available;
-        });
-      }
+      if (mounted) setState(() => _speechEnabled = available);
     } catch (e) {
-      print("Speech Initialization Failed completely: $e");
+      print("Speech init failed: $e");
+    }
+  }
+
+  // 🍋 True if user has typed anything or selected a mood
+  bool get _hasChanges =>
+      _titleController.text.trim().isNotEmpty ||
+      _noteController.text.trim().isNotEmpty ||
+      _tags.isNotEmpty ||
+      _selectedMood != null;
+
+  // 🍋 Warning dialog shown when closing with unsaved changes
+  Future<void> _confirmDiscard() async {
+    if (!_hasChanges) {
+      if (_isListening) _speech.stop();
+      Navigator.pop(context);
+      return;
+    }
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Discard entry?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'You have unsaved changes. Are you sure you want to leave?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Keep Writing',
+              style: TextStyle(
+                color: Colors.yellow[800],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Discard',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDiscard == true) {
+      if (_isListening) _speech.stop();
+      if (context.mounted) Navigator.pop(context);
     }
   }
 
@@ -113,7 +172,6 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                 _noteController.text = baseText.isEmpty
                     ? val.recognizedWords
                     : '$baseText ${val.recognizedWords}';
-
                 _noteController.selection = TextSelection.fromPosition(
                   TextPosition(offset: _noteController.text.length),
                 );
@@ -122,7 +180,12 @@ class _NewEntrySheetState extends State<NewEntrySheet>
           },
         );
       } else {
-        _showMicError("Microphone hardware or device permissions not granted.");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Microphone permission not granted.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     } else {
       _speech.stop();
@@ -130,17 +193,9 @@ class _NewEntrySheetState extends State<NewEntrySheet>
     }
   }
 
-  void _showMicError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
-    );
-  }
-
   void _addTag(String tag) {
     if (tag.trim().isNotEmpty && !_tags.contains(tag.trim())) {
-      setState(() {
-        _tags.add(tag.trim());
-      });
+      setState(() => _tags.add(tag.trim()));
       _tagController.clear();
     }
   }
@@ -151,163 +206,200 @@ class _NewEntrySheetState extends State<NewEntrySheet>
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            'Add Custom Mood',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: customEmojiController,
-                  decoration: const InputDecoration(
-                    labelText: 'Emoji (e.g., 🍕)',
-                    hintText: 'Enter an emoji',
-                  ),
-                  maxLength: 1,
-                ),
-                TextField(
-                  controller: customLabelController,
-                  decoration: const InputDecoration(
-                    labelText: 'Label (e.g., Hungry)',
-                    hintText: 'Enter a feeling',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final emoji = customEmojiController.text.trim();
-                final label = customLabelController.text.trim();
-
-                if (emoji.isNotEmpty && label.isNotEmpty) {
-                  setState(() {
-                    _moods.add({'label': label, 'emoji': emoji});
-                    _selectedMood = label;
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.yellow[600],
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Add Custom Mood',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: customEmojiController,
+              decoration: const InputDecoration(
+                labelText: 'Emoji (e.g. 🍕)',
+                hintText: 'Enter an emoji',
               ),
-              child: const Text(
-                'Add',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
+              maxLength: 2,
+            ),
+            TextField(
+              controller: customLabelController,
+              decoration: const InputDecoration(
+                labelText: 'Label (e.g. Hungry)',
+                hintText: 'Enter a feeling',
               ),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final emoji = customEmojiController.text.trim();
+              final label = customLabelController.text.trim();
+              if (emoji.isNotEmpty && label.isNotEmpty) {
+                setState(() {
+                  _moods.add({'label': label, 'emoji': emoji});
+                  _selectedMood = label;
+                });
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.yellow[600],
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Add',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTagSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Add a tag',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _tagController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'e.g. Work, Gym, Family',
+                filled: true,
+                fillColor: Colors.grey[50],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onSubmitted: (val) {
+                _addTag(val);
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  _addTag(_tagController.text);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.yellow[600],
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Add Tag',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('MMMM d, yyyy').format(now).toUpperCase();
+    final timeStr = DateFormat('hh:mm a').format(now);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
           SafeArea(
-            // 🍋 FIX: Added SingleChildScrollView to make the page scrollable when the keyboard is open
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 24),
-
-                  // --- Header ---
+                  const SizedBox(height: 12), // 🍋 reduced from 24
+                  // --- Top bar: Title + Close ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'New Entry',
                         style: TextStyle(
-                          fontSize: 26,
-                          color: Colors.black,
-                          letterSpacing: -0.5,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
                         ),
                       ),
                       IconButton(
                         icon: const Icon(
                           Icons.close,
                           color: Colors.black,
-                          size: 26,
+                          size: 22,
                         ),
-                        onPressed: () {
-                          if (_isListening) _speech.stop();
-                          Navigator.pop(context);
-                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _confirmDiscard,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // --- Title Input Field ---
+                  const SizedBox(height: 12), // 🍋 reduced from 20
+                  // --- Mood Selector ---
                   const Text(
-                    "Title",
+                    'Select Mood',
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: Colors.black87,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Colors.black54,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _titleController,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Give your entry a title...',
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // --- Mood Selector Area ---
-                  const Text(
-                    "Select Mood",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
+                  const SizedBox(height: 8), // 🍋 reduced from 10
+                  // 🍋 Smaller carousel — height 64, width 52, emoji 20
                   SizedBox(
-                    height: 86,
+                    height: 64,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
@@ -316,37 +408,37 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                         if (index == _moods.length) {
                           return Padding(
                             padding: const EdgeInsets.only(
-                              right: 8.0,
-                              top: 4,
-                              bottom: 4,
+                              right: 6.0,
+                              top: 2,
+                              bottom: 2,
                             ),
                             child: GestureDetector(
                               onTap: _showAddCustomMoodDialog,
                               child: Container(
-                                width: 68,
+                                width: 52,
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   border: Border.all(
                                     color: Colors.grey[200]!,
-                                    width: 1.5,
+                                    width: 1.2,
                                   ),
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
                                       Icons.add,
-                                      size: 24,
+                                      size: 18,
                                       color: Colors.grey[400],
                                     ),
-                                    const SizedBox(height: 4),
-                                    const Text(
+                                    const SizedBox(height: 2),
+                                    Text(
                                       'Custom',
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 9,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.grey,
+                                        color: Colors.grey[400],
                                       ),
                                     ),
                                   ],
@@ -355,23 +447,21 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                             ),
                           );
                         }
-
-                        final _mood = _moods[index];
-                        final isSelected = _selectedMood == _mood['label'];
-
+                        final mood = _moods[index];
+                        final isSelected = _selectedMood == mood['label'];
                         return Padding(
                           padding: const EdgeInsets.only(
-                            right: 10.0,
-                            top: 4,
-                            bottom: 4,
+                            right: 8.0,
+                            top: 2,
+                            bottom: 2,
                           ),
                           child: GestureDetector(
                             onTap: () =>
-                                setState(() => _selectedMood = _mood['label']),
+                                setState(() => _selectedMood = mood['label']),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOutCubic,
-                              width: 68,
+                              width: 52,
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? Colors.yellow[50]
@@ -380,16 +470,16 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                                   color: isSelected
                                       ? Colors.yellow[600]!
                                       : Colors.transparent,
-                                  width: 2,
+                                  width: 1.8,
                                 ),
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(14),
                                 boxShadow: isSelected
                                     ? [
                                         BoxShadow(
                                           color: Colors.yellow[600]!
-                                              .withOpacity(0.15),
-                                          blurRadius: 6,
-                                          offset: const Offset(0, 3),
+                                              .withOpacity(0.12),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
                                         ),
                                       ]
                                     : [],
@@ -398,21 +488,21 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   AnimatedScale(
-                                    scale: isSelected ? 1.15 : 1.0,
+                                    scale: isSelected ? 1.12 : 1.0,
                                     duration: const Duration(milliseconds: 200),
                                     child: Text(
-                                      _mood['emoji']!,
-                                      style: const TextStyle(fontSize: 26),
+                                      mood['emoji']!,
+                                      style: const TextStyle(fontSize: 20),
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 3),
                                   Text(
-                                    _mood['label']!,
+                                    mood['label']!,
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 9,
                                       fontWeight: isSelected
                                           ? FontWeight.w800
-                                          : Kish().weightMapping,
+                                          : FontWeight.w500,
                                       color: isSelected
                                           ? Colors.yellow[900]
                                           : Colors.black87,
@@ -428,166 +518,152 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                       },
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // --- Notes Field Header and Mic Action Row ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "What's on your mind? (optional)",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: _isListening
-                              ? Colors.red[50]
-                              : Colors.yellow[100],
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            _isListening ? Icons.stop : Icons.mic,
-                            color: _isListening
-                                ? Colors.red
-                                : Colors.yellow[800],
-                            size: 18,
-                          ),
-                          onPressed: _isSaving ? null : _toggleListening,
-                          tooltip: _isListening
-                              ? 'Stop listening'
-                              : 'Record voice note',
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(6),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // 🍋 FIX: Swapped Expanded to a fixed height Container so it plays nice inside the ScrollView
+                  const SizedBox(height: 16), // 🍋 reduced from 24
+                  // ==========================================
+                  // 🍋 UNIFIED JOURNAL CARD
+                  // ==========================================
                   Container(
-                    height: 160,
-                    child: TextField(
-                      controller: _noteController,
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      decoration: InputDecoration(
-                        hintText: 'Write a note...',
-                        filled: true,
-                        fillColor: Colors.grey[50],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey[200]!, width: 1.2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date + Time header inside the card
+                        Text(
+                          dateStr,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.grey[500],
+                            letterSpacing: 0.8,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              timeStr,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[400],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(height: 1, thickness: 1),
+                        const SizedBox(height: 16),
+
+                        // 🍋 Title field — large, bold
+                        TextField(
+                          controller: _titleController,
+                          focusNode: _titleFocus,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                            letterSpacing: -0.3,
+                            height: 1.3,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Title your thoughts...',
+                            hintStyle: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey[300],
+                              letterSpacing: -0.3,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) =>
+                              FocusScope.of(context).requestFocus(_noteFocus),
+                          maxLines: null,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // 🍋 Note field — seamlessly below title
+                        TextField(
+                          controller: _noteController,
+                          focusNode: _noteFocus,
+                          maxLines: null,
+                          minLines: 5,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.grey[700],
+                            height: 1.6,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Begin writing your story here...',
+                            hintStyle: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey[350] ?? Colors.grey[300],
+                              height: 1.6,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+
+                        // Mic button inside the card — bottom right
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: GestureDetector(
+                            onTap: _isSaving ? null : _toggleListening,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _isListening
+                                    ? Colors.red[50]
+                                    : Colors.yellow[100],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isListening ? Icons.stop : Icons.mic,
+                                color: _isListening
+                                    ? Colors.redAccent
+                                    : Colors.yellow[800],
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // --- Tags Field ---
-                  // ✅ After
+                  // --- Tags ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        "Tags (optional)",
+                        'Tags (optional)',
                         style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: Colors.black87,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: Colors.black54,
+                          letterSpacing: 0.3,
                         ),
                       ),
-                      // 🍋 "+" button that opens the input sheet
                       GestureDetector(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.white,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(20),
-                              ),
-                            ),
-                            builder: (context) => Padding(
-                              padding: EdgeInsets.only(
-                                bottom: MediaQuery.of(
-                                  context,
-                                ).viewInsets.bottom,
-                                left: 24,
-                                right: 24,
-                                top: 24,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Add a tag',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _tagController,
-                                    autofocus: true,
-                                    decoration: InputDecoration(
-                                      hintText: 'e.g. Work, Gym, Family',
-                                      filled: true,
-                                      fillColor: Colors.grey[50],
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                    ),
-                                    onSubmitted: (val) {
-                                      _addTag(val);
-                                      Navigator.pop(context);
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        _addTag(_tagController.text);
-                                        Navigator.pop(context);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.yellow[600],
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'Add Tag',
-                                        style: TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: _showAddTagSheet,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
@@ -604,10 +680,8 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-
-                  // 🍋 Chips only appear once tags are added
-                  if (_tags.isNotEmpty)
+                  if (_tags.isNotEmpty) ...[
+                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -632,21 +706,21 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                           )
                           .toList(),
                     ),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
 
-          // --- Animated Success Overlay ---
+          // --- Success Overlay ---
           if (_showSuccessAnimation)
             Positioned.fill(
               child: TweenAnimationBuilder<double>(
                 tween: Tween<double>(begin: 0.0, end: 1.0),
                 duration: const Duration(milliseconds: 250),
-                builder: (context, opacityValue, child) {
-                  return Opacity(opacity: opacityValue, child: child);
-                },
+                builder: (context, value, child) =>
+                    Opacity(opacity: value, child: child),
                 child: Container(
                   color: Colors.white.withOpacity(0.97),
                   child: Center(
@@ -668,12 +742,11 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                           tween: Tween<double>(begin: 15.0, end: 0.0),
                           duration: const Duration(milliseconds: 500),
                           curve: Curves.easeOutCubic,
-                          builder: (context, slideValue, child) {
-                            return Transform.translate(
-                              offset: Offset(0, slideValue),
-                              child: child,
-                            );
-                          },
+                          builder: (context, slide, child) =>
+                              Transform.translate(
+                                offset: Offset(0, slide),
+                                child: child,
+                              ),
                           child: const Text(
                             'Squeezed Successfully!',
                             style: TextStyle(
@@ -693,7 +766,7 @@ class _NewEntrySheetState extends State<NewEntrySheet>
         ],
       ),
 
-      // --- Action Buttons docked at the bottom ---
+      // --- Bottom Action Buttons ---
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
@@ -701,12 +774,7 @@ class _NewEntrySheetState extends State<NewEntrySheet>
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed: _isSaving
-                      ? null
-                      : () {
-                          if (_isListening) _speech.stop();
-                          Navigator.pop(context);
-                        },
+                  onPressed: _isSaving ? null : _confirmDiscard,
                   child: const Text(
                     'Cancel',
                     style: TextStyle(
@@ -723,51 +791,40 @@ class _NewEntrySheetState extends State<NewEntrySheet>
                   onPressed: _isSaving
                       ? null
                       : () async {
-                          if (_titleController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please give your entry a title first!',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          if (_selectedMood == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please select a mood first!'),
-                              ),
-                            );
-                            return;
-                          }
-
                           if (_isListening) {
                             _speech.stop();
                             setState(() => _isListening = false);
                           }
+                          setState(() => _isSaving = true);
 
-                          setState(() {
-                            _isSaving = true;
-                          });
+                          // 🍋 Use defaults if title or mood not provided
+                          final String finalTitle =
+                              _titleController.text.trim().isEmpty
+                              ? 'Unnamed Journal'
+                              : _titleController.text.trim();
 
-                          final emoji = _moods.firstWhere(
-                            (m) => m['label'] == _selectedMood,
-                          )['emoji']!;
+                          final String finalMood = _selectedMood ?? 'No Mood';
+
+                          final String finalEmoji = _selectedMood != null
+                              ? _moods.firstWhere(
+                                  (m) => m['label'] == _selectedMood,
+                                  orElse: () => {
+                                    'label': 'No Mood',
+                                    'emoji': '🍋',
+                                  },
+                                )['emoji']!
+                              : '🍋';
 
                           await CloudService.saveMoodEntry(
-                            _titleController.text.trim(),
-                            _selectedMood!,
-                            emoji,
+                            finalTitle,
+                            finalMood,
+                            finalEmoji,
                             _noteController.text.trim(),
                             List<String>.from(_tags),
                           );
 
                           if (mounted) {
-                            setState(() {
-                              _showSuccessAnimation = true;
-                            });
+                            setState(() => _showSuccessAnimation = true);
                             _successController.forward();
                             _playSuccessSound();
                           }
@@ -804,8 +861,4 @@ class _NewEntrySheetState extends State<NewEntrySheet>
       ),
     );
   }
-}
-
-class Kish {
-  FontWeight get weightMapping => FontWeight.w500;
 }
